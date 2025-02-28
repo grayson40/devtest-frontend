@@ -1,10 +1,10 @@
-# DevTest
+# Compass
 
 A developer-focused test management platform that streamlines test automation, execution, and integration with your development workflow.
 
 ## Overview
 
-DevTest helps development teams:
+Compass helps development teams:
 - Manage and organize automated test cases
 - Create test sequences for complex workflows
 - Integrate with Jira for requirement traceability

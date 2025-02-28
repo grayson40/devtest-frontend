@@ -10,23 +10,23 @@ const SECTIONS = [
     title: 'TEST MANAGEMENT',
     items: [
       { 
-        label: 'Sequences', 
-        href: '/sequences', 
-        icon: '⚡',
-        description: 'Multi-step test flows' 
-      },
-      { 
         label: 'Tests', 
         href: '/tests', 
         icon: '🧪',
         description: 'Manage test cases' 
       },
+      // { 
+      //   label: 'Tickets', 
+      //   href: '/tickets', 
+      //   icon: '🎫',
+      //   description: 'Test requirements' 
+      // },
       { 
-        label: 'Tickets', 
-        href: '/tickets/active', 
-        icon: '🎫',
-        description: 'Test requirements' 
-      },
+        label: 'Sequences', 
+        href: '/sequences', 
+        icon: '⚡',
+        description: 'Multi-step test flows' 
+      }
     ]
   },
   {
@@ -109,13 +109,13 @@ export default function Sidebar() {
     >
       <VStack h="full" align="stretch" spacing={6}>
         <Box px={4}>
-          <Link href="/">
+          <Link href="/dashboard">
             <HStack spacing={2}>
               <Text fontSize="xl" lineHeight="1">
-                🧪
+                🌐
               </Text>
               <Text fontSize="lg" fontWeight="semibold" color="gray.900">
-                DevTest
+                Compass
               </Text>
             </HStack>
           </Link>

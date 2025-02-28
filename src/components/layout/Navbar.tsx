@@ -4,8 +4,13 @@ import React from 'react'
 import { Box, Flex, HStack, Input, InputGroup, InputLeftElement, Button, Menu, MenuButton, MenuList, MenuItem, IconButton, Text, Avatar, Divider } from '@chakra-ui/react'
 import { SearchIcon, AddIcon, ChevronDownIcon } from '@chakra-ui/icons'
 import Link from 'next/link'
+import { useAuth } from '@/context/AuthContext'
+import { useRouter } from 'next/navigation'
 
 export function Navbar() {
+  const { user, logout } = useAuth()
+  const router = useRouter()
+
   return (
     <Box 
       as="nav" 
@@ -85,20 +90,6 @@ export function Navbar() {
                   </Box>
                 </MenuItem>
               </Link>
-              <Link href="/projects/new">
-                <MenuItem 
-                  icon={<Text fontSize="xl">📁</Text>}
-                  borderRadius="md"
-                  _hover={{
-                    bg: 'primary.50',
-                  }}
-                >
-                  <Box>
-                    <Text fontWeight="medium">Jira Ticket</Text>
-                    <Text fontSize="xs" color="gray.500">Create from Jira ticket</Text>
-                  </Box>
-                </MenuItem>
-              </Link>
             </MenuList>
           </Menu>
 
@@ -118,8 +109,8 @@ export function Navbar() {
             </MenuButton>
             <MenuList p={2} minW="200px">
               <Box px={3} py={2} mb={2}>
-                <Text fontWeight="medium">John Doe</Text>
-                <Text fontSize="sm" color="gray.500">john@example.com</Text>
+                <Text fontWeight="medium">{user?.name}</Text>
+                <Text fontSize="sm" color="gray.500">{user?.email}</Text>
               </Box>
               <Divider mb={2} />
               <MenuItem
@@ -128,6 +119,7 @@ export function Navbar() {
                 _hover={{
                   bg: 'gray.50',
                 }}
+                onClick={() => router.push('/settings')}
               >
                 Settings
               </MenuItem>
@@ -137,6 +129,10 @@ export function Navbar() {
                 color="red.500"
                 _hover={{
                   bg: 'red.50',
+                }}
+                onClick={() => {
+                  logout()
+                  router.push('/')
                 }}
               >
                 Sign Out

@@ -27,14 +27,33 @@ import {
   Select,
   FormControl,
   FormLabel,
+  Grid,
+  GridItem,
+  Tabs,
+  TabList,
+  TabPanels,
+  TabPanel,
+  Tab,
+  useClipboard,
+  Flex,
+  Icon,
 } from '@chakra-ui/react'
-import { ChevronDownIcon, ChevronUpIcon, RepeatIcon } from '@chakra-ui/icons'
+import { ChevronDownIcon, ChevronUpIcon, RepeatIcon, CheckIcon, CopyIcon, WarningIcon } from '@chakra-ui/icons'
 import { AppLayout } from '@/components/layout'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { testsApi, TestResult } from '@/api/tests'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ErrorState, LoadingState } from '@/components/common'
+import { motion } from 'framer-motion'
+
+const MotionBox = motion(Box)
+
+interface LogEntry {
+  timestamp: string
+  level: 'info' | 'error' | 'debug'
+  message: string
+}
 
 interface TestExecutionStep {
   id: string
@@ -42,7 +61,7 @@ interface TestExecutionStep {
   action: string
   expected: string
   status: 'pending' | 'running' | 'passed' | 'failed'
-  logs: string[]
+  logs: LogEntry[]
   screenshot?: string
   error?: string
   startTime?: string
@@ -58,6 +77,12 @@ interface TestExecution {
   startTime: string
   endTime?: string
   environment: string
+  config: {
+    browser: string
+    viewport: string
+    network: string
+    region: string
+  }
 }
 
 export default function TestRunPage({ params }: { params: { id: string } }) {
@@ -67,11 +92,21 @@ export default function TestRunPage({ params }: { params: { id: string } }) {
   const toast = useToast()
   const router = useRouter()
   const queryClient = useQueryClient()
+  const [selectedStep, setSelectedStep] = React.useState<string | null>(null)
+  const { onCopy, hasCopied } = useClipboard("")
 
   // Fetch test details
   const { data: test, isLoading: isLoadingTest, error } = useQuery({
     queryKey: ['test', params.id],
     queryFn: () => testsApi.getTest(params.id)
+  })
+
+  // Fetch test execution details
+  const { data: executionData, isLoading: isLoadingExecution, error: executionError } = useQuery({
+    queryKey: ['test-execution', params.id],
+    queryFn: () => testsApi.getTestResult(params.id),
+    refetchInterval: (data) => 
+      data?.status === 'running' || data?.status === 'pending' ? 1000 : false
   })
 
   // Start test execution
@@ -98,7 +133,13 @@ export default function TestRunPage({ params }: { params: { id: string } }) {
         currentStep: 0,
         steps,
         startTime: result.startTime,
-        environment: result.environment
+        environment: result.environment,
+        config: {
+          browser: result.config.browser,
+          viewport: result.config.viewport,
+          network: result.config.network,
+          region: result.config.region,
+        }
       })
 
       // Start polling for results
@@ -139,7 +180,7 @@ export default function TestRunPage({ params }: { params: { id: string } }) {
               error: isCurrent && result.error ? result.error.message : undefined,
               logs: [
                 ...step.logs,
-                ...(isCurrent ? [`[${new Date().toISOString()}] ${result.status === 'failed' ? 'Step failed' : 'Step in progress'}`] : [])
+                ...(isCurrent ? [{ timestamp: new Date().toISOString(), level: 'info', message: result.status === 'failed' ? 'Step failed' : 'Step in progress' }] : [])
               ]
             }
           })
@@ -199,7 +240,7 @@ export default function TestRunPage({ params }: { params: { id: string } }) {
     }
   }
 
-  if (isLoadingTest) {
+  if (isLoadingTest || isLoadingExecution) {
     return (
       <AppLayout>
         <Box py={8}>
@@ -209,7 +250,7 @@ export default function TestRunPage({ params }: { params: { id: string } }) {
     )
   }
 
-  if (error) {
+  if (error || executionError) {
     return (
       <AppLayout>
         <Box py={8}>
@@ -236,183 +277,304 @@ export default function TestRunPage({ params }: { params: { id: string } }) {
     )
   }
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'running': return 'blue'
+      case 'completed': return 'green'
+      case 'failed': return 'red'
+      default: return 'gray'
+    }
+  }
+
+  const formatDuration = (start: string, end?: string) => {
+    if (!end) return 'In progress...'
+    const duration = new Date(end).getTime() - new Date(start).getTime()
+    return `${(duration / 1000).toFixed(1)}s`
+  }
+
   return (
     <AppLayout>
-      <Container maxW="container.lg" py={8}>
-        <VStack spacing={8} align="stretch">
-          <Box>
-            <Breadcrumb mb={4}>
-              <BreadcrumbItem>
-                <BreadcrumbLink as={Link} href="/">Home</BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbItem>
-                <BreadcrumbLink as={Link} href="/tests">Tests</BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbItem>
-                <BreadcrumbLink as={Link} href={`/tests/${params.id}`}>{test.title}</BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbItem isCurrentPage>
-                <BreadcrumbLink>Run Test</BreadcrumbLink>
-              </BreadcrumbItem>
-            </Breadcrumb>
-
-            <HStack justify="space-between" mb={6}>
-              <Box>
-                <Heading size="lg" mb={2}>{test.title}</Heading>
-                <Text color="gray.600">{test.description}</Text>
-              </Box>
-              {execution?.status === 'completed' || execution?.status === 'failed' ? (
-                <Button
-                  colorScheme="primary"
-                  onClick={handleViewResults}
-                  leftIcon={<RepeatIcon />}
-                >
-                  View Results
-                </Button>
-              ) : !execution && (
-                <VStack align="flex-end" spacing={4}>
-                  <FormControl>
-                    <FormLabel>Environment</FormLabel>
-                    <Select
-                      value={selectedEnvironment}
-                      onChange={(e) => setSelectedEnvironment(e.target.value)}
-                      w="200px"
-                    >
-                      <option value="development">Development</option>
-                      <option value="staging">Staging</option>
-                      <option value="production">Production</option>
-                    </Select>
-                  </FormControl>
-                  <Button
-                    colorScheme="primary"
-                    onClick={handleStart}
-                    isLoading={executeMutation.isPending}
-                    leftIcon={<RepeatIcon />}
+      <Box bg="gray.900" minH="calc(100vh - 64px)">
+        <Container maxW="container.xl" py={8}>
+          <VStack spacing={8} align="stretch">
+            {/* Header */}
+            <Grid templateColumns="1fr auto" gap={8} alignItems="center">
+              <VStack align="flex-start" spacing={3}>
+                <HStack spacing={4}>
+                  <Badge
+                    colorScheme={getStatusColor(execution.status)}
+                    px={3}
+                    py={1}
+                    borderRadius="full"
+                    textTransform="capitalize"
                   >
-                    Start Test Run
-                  </Button>
-                </VStack>
-              )}
-            </HStack>
-          </Box>
+                    {execution.status}
+                  </Badge>
+                  <Text color="whiteAlpha.600" fontSize="sm">
+                    Started {new Date(execution.startTime).toLocaleTimeString()}
+                  </Text>
+                  <Text color="whiteAlpha.600" fontSize="sm">
+                    Duration: {formatDuration(execution.startTime, execution.endTime)}
+                  </Text>
+                </HStack>
+                <Text color="white" fontSize="2xl" fontWeight="semibold">
+                  Test Execution #{params.id}
+                </Text>
+              </VStack>
 
-          {execution && (
-            <Card>
-              <CardBody>
-                <VStack spacing={6} align="stretch">
-                  <HStack justify="space-between">
-                    <HStack spacing={4}>
-                      <Badge
-                        colorScheme={
-                          execution.status === 'completed' ? 'green' :
-                          execution.status === 'failed' ? 'red' :
-                          execution.status === 'running' ? 'blue' :
-                          'gray'
-                        }
-                        px={2}
-                        py={1}
-                        borderRadius="full"
-                      >
-                        {execution.status.toUpperCase()}
-                      </Badge>
-                      <Badge
-                        colorScheme="purple"
-                        px={2}
-                        py={1}
-                        borderRadius="full"
-                      >
-                        {execution.environment}
-                      </Badge>
-                    </HStack>
-                    <Text fontSize="sm" color="gray.500">
-                      Started: {new Date(execution.startTime).toLocaleTimeString()}
-                    </Text>
-                  </HStack>
+              <HStack spacing={4}>
+                <Button
+                  variant="outline"
+                  colorScheme={getStatusColor(execution.status)}
+                  size="sm"
+                  leftIcon={execution.status === 'running' ? <Icon as={WarningIcon} /> : undefined}
+                  isDisabled={execution.status !== 'running'}
+                >
+                  {execution.status === 'running' ? 'Stop Execution' : 'Rerun Test'}
+                </Button>
+              </HStack>
+            </Grid>
 
-                  <Progress
-                    value={(execution.currentStep / execution.steps.length) * 100}
-                    size="sm"
-                    colorScheme={
-                      execution.status === 'completed' ? 'green' :
-                      execution.status === 'failed' ? 'red' :
-                      'blue'
-                    }
-                    hasStripe
-                    isAnimated
-                  />
+            {/* Main Content */}
+            <Grid templateColumns={{ base: '1fr', lg: '3fr 1fr' }} gap={8}>
+              {/* Left Panel */}
+              <GridItem>
+                <Tabs variant="soft-rounded" colorScheme="blue">
+                  <TabList mb={4} bg="whiteAlpha.50" p={1} borderRadius="full">
+                    <Tab 
+                      color="whiteAlpha.600" 
+                      _selected={{ 
+                        color: 'white',
+                        bg: 'whiteAlpha.200'
+                      }}
+                    >
+                      Steps
+                    </Tab>
+                    <Tab 
+                      color="whiteAlpha.600"
+                      _selected={{ 
+                        color: 'white',
+                        bg: 'whiteAlpha.200'
+                      }}
+                    >
+                      Logs
+                    </Tab>
+                    <Tab 
+                      color="whiteAlpha.600"
+                      _selected={{ 
+                        color: 'white',
+                        bg: 'whiteAlpha.200'
+                      }}
+                    >
+                      Raw Output
+                    </Tab>
+                  </TabList>
 
-                  <VStack spacing={4} align="stretch">
-                    {execution.steps.map((step, index) => (
-                      <Card
-                        key={step.id}
-                        variant="outline"
-                        bg={
-                          step.status === 'running' ? 'blue.50' :
-                          step.status === 'passed' ? 'green.50' :
-                          step.status === 'failed' ? 'red.50' :
-                          'white'
-                        }
-                      >
-                        <CardBody>
-                          <VStack spacing={4} align="stretch">
-                            <HStack justify="space-between">
-                              <HStack>
-                                <Badge
-                                  colorScheme={
-                                    step.status === 'passed' ? 'green' :
-                                    step.status === 'failed' ? 'red' :
-                                    step.status === 'running' ? 'blue' :
-                                    'gray'
-                                  }
-                                >
-                                  Step {index + 1}
-                                </Badge>
-                                <Text fontWeight="medium">{step.action}</Text>
-                              </HStack>
-                              {step.logs.length > 0 && (
-                                <Tooltip label="Toggle logs">
-                                  <IconButton
-                                    aria-label="Toggle logs"
-                                    icon={expandedSteps.includes(step.id) ? <ChevronUpIcon /> : <ChevronDownIcon />}
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => toggleStepExpansion(step.id)}
-                                  />
-                                </Tooltip>
+                  <TabPanels>
+                    {/* Steps Panel */}
+                    <TabPanel p={0}>
+                      <VStack spacing={4} align="stretch">
+                        {execution.steps.map((step) => (
+                          <MotionBox
+                            key={step.id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.3 }}
+                          >
+                            <Box
+                              bg="whiteAlpha.50"
+                              borderRadius="lg"
+                              p={4}
+                              cursor="pointer"
+                              onClick={() => setSelectedStep(step.id)}
+                              position="relative"
+                              _hover={{ bg: 'whiteAlpha.100' }}
+                            >
+                              <Grid templateColumns="auto 1fr auto" gap={4} alignItems="center">
+                                <Box>
+                                  {step.status === 'running' ? (
+                                    <Progress
+                                      size="xs"
+                                      isIndeterminate
+                                      colorScheme="blue"
+                                      width="24px"
+                                    />
+                                  ) : (
+                                    <Badge
+                                      colorScheme={getStatusColor(step.status)}
+                                      variant="subtle"
+                                    >
+                                      {step.status}
+                                    </Badge>
+                                  )}
+                                </Box>
+
+                                <VStack align="flex-start" spacing={1}>
+                                  <Text color="white" fontWeight="medium">
+                                    {step.action}
+                                  </Text>
+                                  <Text color="whiteAlpha.600" fontSize="sm">
+                                    {step.expected}
+                                  </Text>
+                                </VStack>
+
+                                <Text color="whiteAlpha.400" fontSize="sm">
+                                  {step.endTime ? formatDuration(step.startTime!, step.endTime) : ''}
+                                </Text>
+                              </Grid>
+
+                              {selectedStep === step.id && (
+                                <Box mt={4}>
+                                  <Divider mb={4} />
+                                  <VStack align="stretch" spacing={4}>
+                                    {step.logs.map((log, index) => (
+                                      <Text
+                                        key={index}
+                                        color={log.level === 'error' ? 'red.300' : 'whiteAlpha.800'}
+                                        fontSize="sm"
+                                        fontFamily="mono"
+                                      >
+                                        {log.message}
+                                      </Text>
+                                    ))}
+                                    {step.screenshot && (
+                                      <Box
+                                        mt={2}
+                                        borderRadius="md"
+                                        overflow="hidden"
+                                        border="1px"
+                                        borderColor="whiteAlpha.200"
+                                      >
+                                        <img src={step.screenshot} alt="Step screenshot" />
+                                      </Box>
+                                    )}
+                                  </VStack>
+                                </Box>
                               )}
-                            </HStack>
+                            </Box>
+                          </MotionBox>
+                        ))}
+                      </VStack>
+                    </TabPanel>
 
-                            <Collapse in={expandedSteps.includes(step.id)}>
-                              <VStack align="stretch" spacing={2}>
-                                {step.logs.map((log, i) => (
-                                  <Code key={i} p={2} borderRadius="md" fontSize="sm">
-                                    {log}
-                                  </Code>
-                                ))}
-                                {step.error && (
-                                  <Alert status="error" size="sm">
-                                    <AlertIcon />
-                                    {step.error}
-                                  </Alert>
-                                )}
-                                {step.screenshot && (
-                                  <Box>
-                                    <img src={step.screenshot} alt={`Step ${index + 1} screenshot`} />
-                                  </Box>
-                                )}
-                              </VStack>
-                            </Collapse>
-                          </VStack>
-                        </CardBody>
-                      </Card>
-                    ))}
-                  </VStack>
+                    {/* Logs Panel */}
+                    <TabPanel p={0}>
+                      <Box
+                        bg="gray.800"
+                        borderRadius="lg"
+                        p={4}
+                        fontFamily="mono"
+                        fontSize="sm"
+                        color="whiteAlpha.800"
+                        maxH="600px"
+                        overflowY="auto"
+                      >
+                        {execution.steps.flatMap(step => step.logs).map((log, index) => (
+                          <Text
+                            key={index}
+                            color={log.level === 'error' ? 'red.300' : 'whiteAlpha.800'}
+                            mb={2}
+                          >
+                            <Text as="span" color="whiteAlpha.400">
+                              {new Date(log.timestamp).toLocaleTimeString()} 
+                            </Text>
+                            {' '}
+                            {log.message}
+                          </Text>
+                        ))}
+                      </Box>
+                    </TabPanel>
+
+                    {/* Raw Output Panel */}
+                    <TabPanel p={0}>
+                      <Box position="relative">
+                        <Button
+                          size="xs"
+                          position="absolute"
+                          top={2}
+                          right={2}
+                          onClick={onCopy}
+                          leftIcon={hasCopied ? <CheckIcon /> : <CopyIcon />}
+                        >
+                          {hasCopied ? 'Copied!' : 'Copy'}
+                        </Button>
+                        <Code
+                          display="block"
+                          whiteSpace="pre"
+                          p={4}
+                          borderRadius="lg"
+                          bg="gray.800"
+                          color="whiteAlpha.800"
+                          fontSize="sm"
+                          maxH="600px"
+                          overflowY="auto"
+                        >
+                          {JSON.stringify(execution, null, 2)}
+                        </Code>
+                      </Box>
+                    </TabPanel>
+                  </TabPanels>
+                </Tabs>
+              </GridItem>
+
+              {/* Right Panel - Environment & Config */}
+              <GridItem>
+                <VStack spacing={6} align="stretch">
+                  <Box bg="whiteAlpha.50" borderRadius="lg" p={6}>
+                    <Text color="white" fontWeight="semibold" mb={4}>
+                      Environment
+                    </Text>
+                    <VStack align="stretch" spacing={3}>
+                      <HStack justify="space-between">
+                        <Text color="whiteAlpha.600">Browser</Text>
+                        <Text color="white">{execution.config.browser}</Text>
+                      </HStack>
+                      <HStack justify="space-between">
+                        <Text color="whiteAlpha.600">Viewport</Text>
+                        <Text color="white">{execution.config.viewport}</Text>
+                      </HStack>
+                      <HStack justify="space-between">
+                        <Text color="whiteAlpha.600">Network</Text>
+                        <Text color="white">{execution.config.network}</Text>
+                      </HStack>
+                      <HStack justify="space-between">
+                        <Text color="whiteAlpha.600">Region</Text>
+                        <Text color="white">{execution.config.region}</Text>
+                      </HStack>
+                    </VStack>
+                  </Box>
+
+                  <Box bg="whiteAlpha.50" borderRadius="lg" p={6}>
+                    <Text color="white" fontWeight="semibold" mb={4}>
+                      Test Progress
+                    </Text>
+                    <VStack align="stretch" spacing={4}>
+                      <Progress
+                        value={(execution.currentStep / execution.steps.length) * 100}
+                        size="sm"
+                        colorScheme={getStatusColor(execution.status)}
+                        borderRadius="full"
+                      />
+                      <HStack justify="space-between">
+                        <Text color="whiteAlpha.600">Steps</Text>
+                        <Text color="white">
+                          {execution.currentStep} / {execution.steps.length}
+                        </Text>
+                      </HStack>
+                      <HStack justify="space-between">
+                        <Text color="whiteAlpha.600">Success Rate</Text>
+                        <Text color="white">
+                          {Math.round((execution.steps.filter(s => s.status === 'passed').length / execution.steps.length) * 100)}%
+                        </Text>
+                      </HStack>
+                    </VStack>
+                  </Box>
                 </VStack>
-              </CardBody>
-            </Card>
-          )}
-        </VStack>
-      </Container>
+              </GridItem>
+            </Grid>
+          </VStack>
+        </Container>
+      </Box>
     </AppLayout>
   )
 } 

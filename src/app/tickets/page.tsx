@@ -187,7 +187,7 @@ function TicketCard({ ticket }: { ticket: Ticket }) {
   )
 }
 
-export default function ActiveTicketsPage() {
+export default function TicketsPage() {
   return (
     <AppLayout>
       <Box p={8}>

@@ -82,7 +82,13 @@ export default function TestsPage() {
     return (
       <AppLayout>
         <Box p={8}>
-          <Text color="red.500">Error loading tests: {error instanceof Error ? error.message : 'Unknown error'}</Text>
+          <ErrorState 
+            title="Failed to load tests" 
+            message={error instanceof Error ? error.message : 'Unknown error'} 
+            onRetry={() => {
+              queryClient.invalidateQueries({ queryKey: ['tests'] })
+            }}
+          />
         </Box>
       </AppLayout>
     )

@@ -54,6 +54,18 @@ export const testsApi = {
     return response.data.data
   },
 
+  // Get recent test cases
+  getRecent: async (): Promise<TestCase[]> => {
+    const response = await axios.get<ApiResponse<TestCase[]>>(`${API_BASE_URL}/tests/recent`)
+    return response.data.data
+  },
+
+  // Get active test executions
+  getActiveExecutions: async (): Promise<TestResult[]> => {
+    const response = await axios.get<ApiResponse<TestResult[]>>(`${API_BASE_URL}/results/active`)
+    return response.data.data
+  },
+
   // Get a test case by ID
   getTest: async (id: string): Promise<TestCase> => {
     const response = await axios.get<ApiResponse<TestCase>>(`${API_BASE_URL}/tests/${id}`)

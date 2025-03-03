@@ -32,24 +32,6 @@ export function Navbar({ children }: NavbarProps) {
         {/* Mobile Menu Button (passed as children) */}
         {children}
         
-        {/* Quick Actions */}
-        <HStack spacing={2} mr={6}>
-          <Link href="/dashboard">
-            <HStack spacing={2} cursor="pointer">
-              <Text fontSize="xl" lineHeight="1">
-                🌐
-              </Text>
-              <Text 
-                fontWeight="semibold" 
-                display={{ base: 'none', md: 'block' }}
-                color="white"
-              >
-                Compass
-              </Text>
-            </HStack>
-          </Link>
-        </HStack>
-
         {/* Search Bar */}
         <InputGroup maxW={{ base: "140px", md: "320px" }}>
           <InputLeftElement pointerEvents="none">

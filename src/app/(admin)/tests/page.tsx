@@ -4,7 +4,6 @@ import React, { useState } from 'react'
 import { Box, Button, Heading, Text, HStack, useToast } from '@chakra-ui/react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import SimpleLayout from '@/components/layout/SimpleLayout'
 import { TestList } from '@/components/test/TestList'
 import { testsApi } from '@/api/tests'
 import { ErrorState, LoadingState } from '@/components/common'
@@ -69,7 +68,6 @@ export default function TestsPage() {
   }
 
   return (
-    <SimpleLayout>
       <Box>
         <Box mb={8}>
           <Heading 
@@ -141,6 +139,5 @@ export default function TestsPage() {
           </Box>
         )}
       </Box>
-    </SimpleLayout>
   )
 } 

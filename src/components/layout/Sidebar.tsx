@@ -33,16 +33,6 @@ const NAV_ITEMS = [
     href: '/agents',
     icon: FiServer,
   },
-  {
-    label: 'Environments',
-    href: '/environments',
-    icon: FiGitBranch,
-  },
-  {
-    label: 'Analytics',
-    href: '/analytics',
-    icon: FiActivity,
-  },
 ]
 
 // NavItem component

@@ -38,11 +38,11 @@ import {
   Collapse,
   IconButton,
   Tooltip,
+  Spinner,
 } from '@chakra-ui/react'
-import { SimpleLayout } from '@/components/layout'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { testsApi } from '@/api/tests'
 import { FiClipboard, FiCheckCircle, FiChevronDown, FiChevronUp, FiPlay, FiInfo } from 'react-icons/fi'
 import { useAuth } from '@/context/AuthContext'
@@ -61,10 +61,13 @@ export default function ImportPage() {
   const [isRunningDemo, setIsRunningDemo] = useState(false)
   const [demoProgress, setDemoProgress] = useState(0)
   const [demoLogs, setDemoLogs] = useState<Array<{message: string, level: 'info' | 'error' | 'warning' | 'debug', timestamp: string}>>([])
+  const [createdTestId, setCreatedTestId] = useState<string | null>(null)
+  const [isExecutingTest, setIsExecutingTest] = useState(false)
   const { onCopy, hasCopied } = useClipboard("")
   const toast = useToast()
   const router = useRouter()
   const { user } = useAuth()
+  const queryClient = useQueryClient()
 
   const exampleHtml = `<html>
   <head>
@@ -97,28 +100,17 @@ export default function ImportPage() {
 </html>`
 
   const createTestMutation = useMutation({
-    mutationFn: async (data: {
-      html: string
-    }) => {
-      const response = await testsApi.createTest(data)
-      return response
-    },
-    onSuccess: (test) => {
-      toast({
-        title: 'Test created',
-        description: 'Successfully created test case',
-        status: 'success',
-        duration: 3000,
-      })
-      router.push(`/tests/${test.id}`)
-    },
-    onError: (error) => {
-      toast({
-        title: 'Error creating test',
-        description: error instanceof Error ? error.message : 'An error occurred',
-        status: 'error',
-        duration: 5000,
-      })
+    mutationFn: testsApi.createTest,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tests'] })
+    }
+  })
+
+  const executeTestMutation = useMutation({
+    mutationFn: (params: { id: string, environment: string }) => 
+      testsApi.executeTest(params.id, params.environment),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['results'] })
     }
   })
 
@@ -207,7 +199,73 @@ export default function ImportPage() {
     }
     
     try {
-      await createTestMutation.mutateAsync({ html: htmlContent })
+      const createdTest = await createTestMutation.mutateAsync({ html: htmlContent })
+      
+      // Set the created test ID
+      if (createdTest && createdTest.id) {
+        setCreatedTestId(createdTest.id)
+        
+        toast({
+          title: 'Test created successfully',
+          description: 'Your test has been created. Preparing to run...',
+          status: 'success',
+          duration: 3000,
+        })
+        
+        try {
+          // Set executing state
+          setIsExecutingTest(true)
+          
+          // Automatically execute the test with default environment
+          await executeTestMutation.mutateAsync({ 
+            id: createdTest.id, 
+            environment: 'cloud' 
+          })
+          
+          // Invalidate queries to ensure fresh data
+          queryClient.invalidateQueries({ queryKey: ['results', createdTest.id] })
+          
+          toast({
+            title: 'Test execution started',
+            description: 'Your test is now running. Redirecting to the execution page...',
+            status: 'success',
+            duration: 3000,
+          })
+          
+          // Redirect to the test run page after a short delay
+          setTimeout(() => {
+            router.push(`/tests/${createdTest.id}/run`)
+          }, 1500)
+        } catch (execError) {
+          // Reset executing state
+          setIsExecutingTest(false)
+          
+          console.error('Error executing test:', execError)
+          toast({
+            title: 'Test created but execution failed',
+            description: 'Your test was created but we couldn\'t start execution. You can run it manually.',
+            status: 'warning',
+            duration: 5000,
+          })
+          
+          // Still redirect to the test page
+          setTimeout(() => {
+            router.push(`/tests/${createdTest.id}`)
+          }, 1500)
+        }
+      } else {
+        toast({
+          title: 'Test created but no ID returned',
+          description: 'The test was created but we couldn\'t get its ID. Please check the tests page.',
+          status: 'warning',
+          duration: 5000,
+        })
+        
+        // Redirect to tests page instead
+        setTimeout(() => {
+          router.push('/tests')
+        }, 1500)
+      }
     } catch (error) {
       toast({
         title: 'Error creating test',
@@ -349,7 +407,7 @@ ${steps.map((step, index) => {
   // Preview mode UI
   if (showPreview) {
     return (
-      <SimpleLayout>
+      <>
         <VStack spacing={6} align="stretch">
           <Breadcrumb>
             <BreadcrumbItem>
@@ -419,20 +477,20 @@ ${steps.map((step, index) => {
                           p={3} 
                           borderWidth="1px" 
                           borderRadius="md"
-                          borderColor="gray.200"
-                          bg="gray.50"
+                          borderColor="gray.700"
+                          bg="gray.800"
                         >
                           <HStack mb={1}>
                             <Badge colorScheme="blue">Step {index + 1}</Badge>
-                            <Text fontWeight="medium">{step.action}</Text>
+                            <Text fontWeight="medium" color="white">{step.action}</Text>
                           </HStack>
                           {step.selector && (
-                            <Text fontSize="sm" color="gray.600">
+                            <Text fontSize="sm" color="gray.400">
                               Selector: <Text as="span" fontFamily="mono" fontSize="xs">{step.selector}</Text>
                             </Text>
                           )}
                           {step.value && (
-                            <Text fontSize="sm" color="gray.600">
+                            <Text fontSize="sm" color="gray.400">
                               Value: <Text as="span" fontFamily="mono" fontSize="xs">{step.value}</Text>
                             </Text>
                           )}
@@ -651,13 +709,81 @@ ${steps.map((step, index) => {
           onClose={() => setShowAuth(false)}
           defaultMode={authMode}
         />
-      </SimpleLayout>
+      </>
+    )
+  }
+
+  // Render the success state after test creation
+  const renderSuccessState = () => {
+    if (!createdTestId) return null
+    
+    return (
+      <Box 
+        position="fixed"
+        top={0}
+        left={0}
+        right={0}
+        bottom={0}
+        bg="blackAlpha.700"
+        zIndex={1000}
+        display="flex"
+        alignItems="center"
+        justifyContent="center"
+      >
+        <Box 
+          bg="gray.800" 
+          p={8} 
+          borderRadius="lg" 
+          maxW="md" 
+          w="full"
+          boxShadow="xl"
+          textAlign="center"
+        >
+          <VStack spacing={6}>
+            {isExecutingTest ? (
+              <>
+                <Spinner size="xl" color="blue.400" thickness="4px" />
+                <Heading size="lg">Preparing Test...</Heading>
+                <Text>Your test has been created and is being prepared for execution.</Text>
+                <Progress 
+                  isIndeterminate 
+                  colorScheme="blue" 
+                  width="100%" 
+                  borderRadius="md"
+                />
+              </>
+            ) : (
+              <>
+                <Icon as={FiCheckCircle} boxSize={16} color="green.400" />
+                <Heading size="lg">Test Created!</Heading>
+                <Text>Your test has been created successfully and is ready to run.</Text>
+                <HStack spacing={4}>
+                  <Button
+                    as={Link}
+                    href={`/tests/${createdTestId}`}
+                    variant="outline"
+                  >
+                    View Test Details
+                  </Button>
+                  <Button
+                    as={Link}
+                    href={`/tests/${createdTestId}/run`}
+                    colorScheme="blue"
+                    leftIcon={<Icon as={FiPlay} />}
+                  >
+                    Run Test Now
+                  </Button>
+                </HStack>
+              </>
+            )}
+          </VStack>
+        </Box>
+      </Box>
     )
   }
 
   // Import page UI
   return (
-    <SimpleLayout>
       <VStack spacing={6} align="stretch">
         <Breadcrumb>
           <BreadcrumbItem>
@@ -671,7 +797,7 @@ ${steps.map((step, index) => {
         <Flex justify="space-between" align="center">
           <Box>
             <Heading size="lg">Import Scribe Test</Heading>
-            <Text color="gray.600">
+            <Text color="gray.400">
               Paste your Scribe HTML export to create a new test case
             </Text>
           </Box>
@@ -706,15 +832,17 @@ ${steps.map((step, index) => {
                         onPaste={handlePaste}
                         onChange={handleChange}
                         value={htmlContent}
-                        bg="gray.50"
+                        bg="gray.700"
                         border="2px"
                         borderStyle="dashed"
-                        borderColor="gray.200"
+                        borderColor="gray.600"
                         _hover={{ borderColor: 'primary.500' }}
                         _focus={{ 
                           borderColor: 'primary.500',
                           boxShadow: 'none'
                         }}
+                        color="white"
+                        _placeholder={{ color: 'gray.400' }}
                         isDisabled={isValidating || createTestMutation.isPending}
                       />
                     </FormControl>
@@ -723,11 +851,11 @@ ${steps.map((step, index) => {
                     <Box
                       border="2px"
                       borderStyle="dashed"
-                      borderColor="gray.200"
+                      borderColor="gray.600"
                       borderRadius="md"
                       p={8}
                       textAlign="center"
-                      bg="gray.50"
+                      bg="gray.700"
                       cursor="pointer"
                       _hover={{ borderColor: 'primary.500' }}
                       onClick={() => {
@@ -798,7 +926,9 @@ ${steps.map((step, index) => {
             </VStack>
           </CardBody>
         </Card>
+        
+        {/* Render success state overlay */}
+        {renderSuccessState()}
       </VStack>
-    </SimpleLayout>
   )
 } 

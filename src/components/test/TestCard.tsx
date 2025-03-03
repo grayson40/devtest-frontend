@@ -1,9 +1,10 @@
 'use client'
 
 import React from 'react'
-import { Box, Flex, Text, Badge, Button, IconButton, Menu, MenuButton, MenuList, MenuItem, HStack, Icon, Portal } from '@chakra-ui/react'
+import { Box, Text, HStack, Badge, IconButton, Tooltip, Flex, Spacer } from '@chakra-ui/react'
+import { FiPlay, FiEdit, FiTrash2, FiEye } from 'react-icons/fi'
 import { motion } from 'framer-motion'
-import { TestCase, TestStatus } from '@/api/tests'
+import { TestCase } from '@/api/tests'
 
 const MotionBox = motion(Box)
 
@@ -17,12 +18,6 @@ interface TestCardProps {
   hasActiveExecution?: boolean
 }
 
-const statusColors: Record<TestStatus, string> = {
-  draft: 'gray',
-  active: 'green',
-  archived: 'red'
-}
-
 export function TestCard({ 
   test, 
   onRun, 
@@ -32,167 +27,137 @@ export function TestCard({
   onViewExecution,
   hasActiveExecution 
 }: TestCardProps) {
-  const status = test.status || 'draft'
-
   return (
     <MotionBox
-      bg="white"
-      p={5}
+      p={4}
       borderRadius="lg"
+      bg="gray.800"
+      borderWidth="1px"
+      borderColor="gray.700"
       boxShadow="sm"
-      position="relative"
       cursor="pointer"
       onClick={onClick}
-      _before={{
-        content: '""',
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        bottom: 0,
-        width: '3px',
-        bg: `${statusColors[status]}.500`,
-      }}
-      _hover={{
-        transform: 'translateY(-2px)',
-        boxShadow: 'md',
-      }}
-      transition="all 0.2s"
-      whileHover={{ y: -2 }}
-      whileTap={{ y: 0 }}
+      whileHover={{ y: -2, boxShadow: '0 6px 20px rgba(0,0,0,0.2)' }}
+      transition={{ duration: 0.2 }}
+      position="relative"
     >
-      <Flex direction="column" h="full">
-        <Flex justify="space-between" align="start" mb={3}>
-          <Box flex="1">
-            <Text fontWeight="medium" mb={1} color="gray.900">
-              {test.title}
-            </Text>
-            {test.description && (
-              <Text fontSize="sm" color="gray.600" noOfLines={2} mb={2}>
-                {test.description}
-              </Text>
-            )}
-            <HStack spacing={2} mb={2}>
-              <Badge
-                px={2}
-                py={0.5}
-                bg={`${statusColors[status]}.100`}
-                color={`${statusColors[status]}.700`}
-                fontWeight="medium"
-                fontSize="xs"
-                borderRadius="full"
-                textTransform="capitalize"
-              >
-                {status}
-              </Badge>
-              <Badge
-                px={2}
-                py={0.5}
-                bg="gray.100"
-                color="gray.600"
-                fontWeight="medium"
-                fontSize="xs"
-                borderRadius="full"
-              >
-                {test.steps.length} steps
-              </Badge>
-            </HStack>
-          </Box>
-        </Flex>
+      {hasActiveExecution && (
+        <Badge
+          position="absolute"
+          top={2}
+          right={2}
+          colorScheme="blue"
+          variant="solid"
+          fontSize="xs"
+          px={2}
+          py={1}
+          borderRadius="full"
+        >
+          Running
+        </Badge>
+      )}
 
-        <Flex justify="space-between" align="center" mt="auto">
-          <HStack spacing={2}>
-            {hasActiveExecution ? (
-              <Button
+      <Text 
+        fontWeight="semibold" 
+        fontSize="lg" 
+        mb={1}
+        color="white"
+        noOfLines={1}
+      >
+        {test.title}
+      </Text>
+      
+      <Text 
+        fontSize="sm" 
+        color="gray.400" 
+        mb={3}
+        noOfLines={2}
+      >
+        {test.description || 'No description provided'}
+      </Text>
+      
+      <Flex align="center">
+        <Badge 
+          colorScheme={
+            test.status === 'active' ? 'green' : 
+            test.status === 'draft' ? 'yellow' : 
+            'gray'
+          }
+          mr={2}
+        >
+          {test.status || 'draft'}
+        </Badge>
+        
+        <Text fontSize="xs" color="gray.500">
+          {test.steps?.length || 0} steps
+        </Text>
+        
+        <Spacer />
+        
+        <HStack spacing={1} onClick={e => e.stopPropagation()}>
+          {hasActiveExecution && onViewExecution && (
+            <Tooltip label="View execution">
+              <IconButton
+                aria-label="View execution"
+                icon={<FiEye />}
                 size="sm"
-                colorScheme="primary"
                 variant="ghost"
-                onClick={(e) => {
+                colorScheme="blue"
+                onClick={e => {
                   e.stopPropagation()
-                  onViewExecution?.()
-                }}
-                leftIcon={<span>👁️</span>}
-                _hover={{
-                  bg: 'primary.50',
-                }}
-              >
-                View Run
-              </Button>
-            ) : (
-              <Button
-                size="sm"
-                colorScheme="primary"
-                variant="ghost"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onRun?.()
-                }}
-                _hover={{
-                  bg: 'primary.50',
-                }}
-              >
-                Run
-              </Button>
-            )}
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={(e) => {
-                e.stopPropagation()
-                onEdit?.()
-              }}
-              _hover={{
-                bg: 'gray.50',
-              }}
-            >
-              Edit
-            </Button>
-          </HStack>
-
-          <Box position="relative">
-            <Menu isLazy placement="bottom-end" gutter={4} strategy="fixed" autoSelect={false}>
-              <MenuButton
-                as={IconButton}
-                aria-label="Options"
-                variant="ghost"
-                size="sm"
-                icon={<span>⋮</span>}
-                onClick={(e) => e.stopPropagation()}
-                _hover={{
-                  bg: 'gray.100',
-                }}
-                _active={{
-                  bg: 'gray.200',
+                  onViewExecution()
                 }}
               />
-              <Portal>
-                <MenuList
-                  shadow="lg"
-                  py={1}
-                  onClick={(e) => e.stopPropagation()}
-                  minW="140px"
-                  zIndex={1400}
-                >
-                  <MenuItem
-                    _hover={{
-                      bg: 'gray.50',
-                    }}
-                  >
-                    Duplicate
-                  </MenuItem>
-                  <MenuItem 
-                    onClick={onDelete} 
-                    color="red.500"
-                    _hover={{
-                      bg: 'red.50',
-                    }}
-                  >
-                    Delete
-                  </MenuItem>
-                </MenuList>
-              </Portal>
-            </Menu>
-          </Box>
-        </Flex>
+            </Tooltip>
+          )}
+          
+          {!hasActiveExecution && onRun && (
+            <Tooltip label="Run test">
+              <IconButton
+                aria-label="Run test"
+                icon={<FiPlay />}
+                size="sm"
+                variant="ghost"
+                colorScheme="blue"
+                onClick={e => {
+                  e.stopPropagation()
+                  onRun()
+                }}
+              />
+            </Tooltip>
+          )}
+          
+          {onEdit && (
+            <Tooltip label="Edit test">
+              <IconButton
+                aria-label="Edit test"
+                icon={<FiEdit />}
+                size="sm"
+                variant="ghost"
+                onClick={e => {
+                  e.stopPropagation()
+                  onEdit()
+                }}
+              />
+            </Tooltip>
+          )}
+          
+          {onDelete && (
+            <Tooltip label="Delete test">
+              <IconButton
+                aria-label="Delete test"
+                icon={<FiTrash2 />}
+                size="sm"
+                variant="ghost"
+                colorScheme="red"
+                onClick={e => {
+                  e.stopPropagation()
+                  onDelete()
+                }}
+              />
+            </Tooltip>
+          )}
+        </HStack>
       </Flex>
     </MotionBox>
   )

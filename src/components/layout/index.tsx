@@ -1,4 +1,6 @@
-export { default as AppLayout } from './AppLayout'
+// export { default as AppLayout } from './AppLayout'
 export { default as Sidebar } from './Sidebar'
 export { Navbar } from './Navbar'
-export { ClientLayout } from './ClientLayout' 
+export { ClientLayout } from './ClientLayout'
+export { default as SimpleLayout } from './SimpleLayout'
+export { default as AppLayout } from './AppLayout' 

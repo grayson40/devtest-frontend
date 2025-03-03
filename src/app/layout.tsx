@@ -16,7 +16,25 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en" data-theme="dark">
+      <head>
+        {/* This script forces dark mode */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  // Force dark mode
+                  localStorage.setItem('chakra-ui-color-mode', 'dark');
+                  document.documentElement.classList.add('chakra-ui-dark');
+                  document.documentElement.style.colorScheme = 'dark';
+                  document.documentElement.style.backgroundColor = '#1A202C'; // gray.900
+                } catch (e) {}
+              })();
+            `,
+          }}
+        />
+      </head>
       <body className={inter.className}>
         <ClientLayout>
           {children}

@@ -3,14 +3,14 @@
 import React from 'react'
 import { Box } from '@chakra-ui/react'
 import { useRouter } from 'next/navigation'
-import { AppLayout } from '@/components/layout'
+import { SimpleLayout } from '@/components/layout'
 import { ErrorState } from '@/components/common'
 
 export default function NotFound() {
   const router = useRouter()
 
   return (
-    <AppLayout>
+    <SimpleLayout>
       <Box py={8}>
         <ErrorState
           title="Page not found"
@@ -18,6 +18,6 @@ export default function NotFound() {
           onRetry={() => router.push('/')}
         />
       </Box>
-    </AppLayout>
+    </SimpleLayout>
   )
 } 

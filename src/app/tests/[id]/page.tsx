@@ -3,7 +3,6 @@
 import React, { useState } from 'react'
 import {
   Box,
-  Container,
   VStack,
   HStack,
   Heading,
@@ -34,7 +33,7 @@ import {
   MenuItem,
 } from '@chakra-ui/react'
 import { ChevronDownIcon, ChevronUpIcon, EditIcon, ChevronRightIcon } from '@chakra-ui/icons'
-import { AppLayout } from '@/components/layout'
+import { SimpleLayout } from '@/components/layout'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { testsApi } from '@/api/tests'
 import Link from 'next/link'
@@ -48,7 +47,6 @@ interface TestStep {
   selector?: string
   value?: string
   screenshotUrl?: string
-  expected?: string
 }
 
 export default function TestPage({ params }: { params: { id: string } }) {
@@ -57,19 +55,16 @@ export default function TestPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const queryClient = useQueryClient()
 
-  // Fetch test details
   const { data: test, isLoading, error } = useQuery({
-    queryKey: ['test', params.id],
-    queryFn: () => testsApi.getTest(params.id)
+    queryKey: ['tests', params.id],
+    queryFn: () => testsApi.getTest(params.id),
   })
 
-  // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: testsApi.deleteTest,
     onSuccess: () => {
       toast({
         title: 'Test deleted',
-        description: 'Test case has been deleted successfully',
         status: 'success',
         duration: 3000,
       })
@@ -86,11 +81,12 @@ export default function TestPage({ params }: { params: { id: string } }) {
   })
 
   const toggleStepExpansion = (stepIndex: number) => {
-    setExpandedSteps(prev =>
-      prev.includes(stepIndex.toString())
-        ? prev.filter(id => id !== stepIndex.toString())
-        : [...prev, stepIndex.toString()]
-    )
+    const stepId = stepIndex.toString()
+    if (expandedSteps.includes(stepId)) {
+      setExpandedSteps(expandedSteps.filter(id => id !== stepId))
+    } else {
+      setExpandedSteps([...expandedSteps, stepId])
+    }
   }
 
   const handleRunTest = () => {
@@ -103,232 +99,164 @@ export default function TestPage({ params }: { params: { id: string } }) {
     }
   }
 
-  const generatePlaywrightCode = (step: TestStep): string => {
-    switch (step.action) {
-      case 'click':
-        return `await page.click('${step.selector}')`
-      case 'fill':
-        return `await page.fill('${step.selector}', '${step.value}')`
-      case 'goto':
-        return `await page.goto('${step.value}')`
-      case 'wait':
-        return `await page.waitForSelector('${step.selector}')`
-      case 'assert':
-        return `await expect(page.locator('${step.selector}')).toBeVisible()`
-      case 'view':
-        return `// View ${step.description}`
-      default:
-        return `// ${step.description}`
-    }
-  }
-
-  const getFullPlaywrightScript = (): string => {
-    if (!test) return ''
-
-    return `import { test, expect } from '@playwright/test';
-
-test('${test.title}', async ({ page }) => {
-  ${test.steps.map(step => '  ' + generatePlaywrightCode(step)).join('\n  ')}
-});`
-  }
-
   if (isLoading) {
     return (
-      <AppLayout>
+      <SimpleLayout>
         <Box py={8}>
           <LoadingState message="Loading test details..." />
         </Box>
-      </AppLayout>
+      </SimpleLayout>
     )
   }
 
   if (error) {
     return (
-      <AppLayout>
-        <Box py={8}>
+      <SimpleLayout>
+        <Box p={8}>
           <ErrorState 
-            title="Failed to load test"
-            message={error instanceof Error ? error.message : 'Could not load test details'}
-            onRetry={() => queryClient.invalidateQueries({ queryKey: ['tests', params.id] })}
+            title="Failed to load test" 
+            message={error instanceof Error ? error.message : 'Unknown error'} 
+            onRetry={() => {
+              queryClient.invalidateQueries({ queryKey: ['tests', params.id] })
+            }}
           />
         </Box>
-      </AppLayout>
+      </SimpleLayout>
     )
   }
 
   if (!test) {
     return (
-      <AppLayout>
-        <Box py={8}>
+      <SimpleLayout>
+        <Box p={8}>
           <ErrorState 
-            title="Test not found"
-            message="The test you're looking for doesn't exist or has been deleted"
+            title="Test not found" 
+            message="The test you're looking for doesn't exist or has been deleted" 
           />
         </Box>
-      </AppLayout>
+      </SimpleLayout>
     )
   }
 
   return (
-    <AppLayout>
-      <Container maxW="container.lg" py={8}>
-        <VStack spacing={8} align="stretch">
-          <Box>
-            <Breadcrumb mb={4}>
-              <BreadcrumbItem>
-                <BreadcrumbLink as={Link} href="/">Home</BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbItem>
-                <BreadcrumbLink as={Link} href="/tests">Tests</BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbItem isCurrentPage>
-                <BreadcrumbLink>{test.title}</BreadcrumbLink>
-              </BreadcrumbItem>
-            </Breadcrumb>
+    <SimpleLayout>
+      <VStack spacing={6} align="stretch">
+        <Breadcrumb>
+          <BreadcrumbItem>
+            <BreadcrumbLink as={Link} href="/dashboard">Dashboard</BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbItem>
+            <BreadcrumbLink as={Link} href="/tests">Tests</BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbItem isCurrentPage>
+            <BreadcrumbLink>{test.title}</BreadcrumbLink>
+          </BreadcrumbItem>
+        </Breadcrumb>
 
-            <HStack justify="space-between" mb={6}>
-              <Box>
-                <Heading size="lg" mb={2}>{test.title}</Heading>
-                <Text color="gray.600">{test.description}</Text>
-              </Box>
-              <HStack spacing={2}>
-                <Button
-                  colorScheme="primary"
-                  onClick={handleRunTest}
-                  leftIcon={<span>▶️</span>}
-                >
-                  Run Test
-                </Button>
-                <Menu>
-                  <MenuButton
-                    as={Button}
-                    variant="ghost"
-                    rightIcon={<ChevronDownIcon />}
-                  >
-                    Actions
-                  </MenuButton>
-                  <MenuList>
-                    <MenuItem icon={<EditIcon />}>Edit Test</MenuItem>
-                    <MenuItem icon={<span>📋</span>}>Duplicate</MenuItem>
-                    <MenuItem icon={<span>🔗</span>}>Link to Ticket</MenuItem>
-                    <MenuItem icon={<span>🗑️</span>} color="red.500" onClick={handleDelete}>
-                      Delete
-                    </MenuItem>
-                  </MenuList>
-                </Menu>
-              </HStack>
+        <HStack justify="space-between" align="center">
+          <Box>
+            <Heading size="lg" mb={2}>{test.title}</Heading>
+            <HStack spacing={4}>
+              <Badge colorScheme={test.status === 'active' ? 'green' : 'gray'}>
+                {test.status}
+              </Badge>
+              <Text color="gray.600">{test.steps.length} steps</Text>
             </HStack>
           </Box>
+          <HStack spacing={4}>
+            <Button
+              colorScheme="blue"
+              onClick={handleRunTest}
+              leftIcon={<span>▶️</span>}
+            >
+              Run Test
+            </Button>
+            <Menu>
+              <MenuButton as={Button} rightIcon={<ChevronDownIcon />} variant="outline">
+                Actions
+              </MenuButton>
+              <MenuList>
+                <MenuItem icon={<EditIcon />} onClick={() => router.push(`/tests/${params.id}/edit`)}>
+                  Edit Test
+                </MenuItem>
+                <MenuItem icon={<span>📋</span>} onClick={() => window.open(`/tests/${params.id}/report`, '_blank')}>
+                  View Report
+                </MenuItem>
+                <MenuItem icon={<span>🗑️</span>} color="red.500" onClick={handleDelete}>
+                  Delete Test
+                </MenuItem>
+              </MenuList>
+            </Menu>
+          </HStack>
+        </HStack>
 
-          <Tabs>
-            <TabList>
-              <Tab>Steps</Tab>
-              <Tab>Playwright Code</Tab>
-              <Tab>Results</Tab>
-            </TabList>
+        <Card>
+          <CardBody>
+            <VStack spacing={4} align="stretch">
+              {test.steps.map((step, index) => (
+                <Box key={index} p={4} borderWidth="1px" borderRadius="md">
+                  <HStack justify="space-between">
+                    <HStack>
+                      <Badge colorScheme="blue">
+                        Step {index + 1}
+                      </Badge>
+                      <Text fontWeight="medium">{step.description}</Text>
+                      <Badge colorScheme="purple">
+                        {step.action}
+                      </Badge>
+                    </HStack>
+                    <IconButton
+                      aria-label="Toggle details"
+                      icon={expandedSteps.includes(index.toString()) ? <ChevronUpIcon /> : <ChevronDownIcon />}
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => toggleStepExpansion(index)}
+                    />
+                  </HStack>
 
-            <TabPanels>
-              <TabPanel px={0}>
-                <VStack spacing={4} align="stretch">
-                  {test.steps.map((step, index) => (
-                    <Card
-                      key={index}
-                      variant="outline"
-                    >
-                      <CardBody>
-                        <VStack spacing={4} align="stretch">
-                          <HStack justify="space-between">
-                            <HStack>
-                              <Badge colorScheme="blue">
-                                Step {index + 1}
-                              </Badge>
-                              <Text fontWeight="medium">{step.description}</Text>
-                              <Badge colorScheme="purple">
-                                {step.action}
-                              </Badge>
-                            </HStack>
-                            <IconButton
-                              aria-label="Toggle details"
-                              icon={expandedSteps.includes(index.toString()) ? <ChevronUpIcon /> : <ChevronDownIcon />}
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => toggleStepExpansion(index)}
+                  <Collapse in={expandedSteps.includes(index.toString())}>
+                    <VStack align="stretch" spacing={2} mt={4}>
+                      {step.selector && (
+                        <Box>
+                          <Text fontSize="sm" fontWeight="medium">Selector:</Text>
+                          <Code p={2} borderRadius="md" fontSize="sm" w="full">
+                            {step.selector}
+                          </Code>
+                        </Box>
+                      )}
+                      {step.value && (
+                        <Box>
+                          <Text fontSize="sm" fontWeight="medium">Value:</Text>
+                          <Code p={2} borderRadius="md" fontSize="sm" w="full">
+                            {step.value}
+                          </Code>
+                        </Box>
+                      )}
+                      {step.screenshotUrl && (
+                        <Box>
+                          <Text fontSize="sm" fontWeight="medium">Screenshot:</Text>
+                          <Box 
+                            mt={2} 
+                            borderWidth="1px" 
+                            borderRadius="md" 
+                            overflow="hidden"
+                          >
+                            <img 
+                              src={step.screenshotUrl} 
+                              alt={`Step ${index + 1} screenshot`} 
+                              style={{ maxWidth: '100%' }} 
                             />
-                          </HStack>
-
-                          <Collapse in={expandedSteps.includes(index.toString())}>
-                            <VStack align="stretch" spacing={2}>
-                              {step.selector && (
-                                <Box>
-                                  <Text fontSize="sm" color="gray.500">Selector:</Text>
-                                  <Code p={2} borderRadius="md">{step.selector}</Code>
-                                </Box>
-                              )}
-                              {step.value && (
-                                <Box>
-                                  <Text fontSize="sm" color="gray.500">Value:</Text>
-                                  <Code p={2} borderRadius="md">{step.value}</Code>
-                                </Box>
-                              )}
-                              {step.screenshotUrl && (
-                                <Box>
-                                  <Text fontSize="sm" color="gray.500" mb={2}>Screenshot:</Text>
-                                  <img src={step.screenshotUrl} alt={`Step ${index + 1} screenshot`} style={{ maxWidth: '100%', borderRadius: '8px' }} />
-                                </Box>
-                              )}
-                              <Box>
-                                <Text fontSize="sm" color="gray.500">Playwright Code:</Text>
-                                <Code p={2} borderRadius="md" display="block" whiteSpace="pre">
-                                  {generatePlaywrightCode(step)}
-                                </Code>
-                              </Box>
-                            </VStack>
-                          </Collapse>
-                        </VStack>
-                      </CardBody>
-                    </Card>
-                  ))}
-                </VStack>
-              </TabPanel>
-
-              <TabPanel px={0}>
-                <Card>
-                  <CardBody>
-                    <VStack align="stretch" spacing={4}>
-                      <HStack justify="space-between">
-                        <Text fontWeight="medium">Full Test Script</Text>
-                        <Button size="sm" variant="outline" leftIcon={<span>📋</span>}>
-                          Copy to Clipboard
-                        </Button>
-                      </HStack>
-                      <Code p={4} borderRadius="md" display="block" whiteSpace="pre">
-                        {getFullPlaywrightScript()}
-                      </Code>
+                          </Box>
+                        </Box>
+                      )}
                     </VStack>
-                  </CardBody>
-                </Card>
-              </TabPanel>
-
-              <TabPanel px={0}>
-                <Card>
-                  <CardBody>
-                    <VStack align="stretch" spacing={4}>
-                      <Text>Recent test executions will appear here</Text>
-                      <Button
-                        colorScheme="primary"
-                        onClick={handleRunTest}
-                        leftIcon={<span>▶️</span>}
-                      >
-                        Run Test Now
-                      </Button>
-                    </VStack>
-                  </CardBody>
-                </Card>
-              </TabPanel>
-            </TabPanels>
-          </Tabs>
-        </VStack>
-      </Container>
-    </AppLayout>
+                  </Collapse>
+                </Box>
+              ))}
+            </VStack>
+          </CardBody>
+        </Card>
+      </VStack>
+    </SimpleLayout>
   )
 } 

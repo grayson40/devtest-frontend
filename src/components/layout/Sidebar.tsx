@@ -1,150 +1,157 @@
 'use client'
 
 import React from 'react'
-import { Box, VStack, HStack, Text, Button, Badge } from '@chakra-ui/react'
+import { Box, VStack, HStack, Text, Divider, useBreakpointValue } from '@chakra-ui/react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { FiHome, FiList, FiPlay, FiSettings, FiServer, FiLayers, FiActivity, FiGitBranch } from 'react-icons/fi'
 
-const SECTIONS = [
+// Simple navigation items
+const NAV_ITEMS = [
   {
-    title: 'TEST MANAGEMENT',
-    items: [
-      { 
-        label: 'Tests', 
-        href: '/tests', 
-        icon: '🧪',
-        description: 'Manage test cases' 
-      },
-      // { 
-      //   label: 'Tickets', 
-      //   href: '/tickets', 
-      //   icon: '🎫',
-      //   description: 'Test requirements' 
-      // },
-      { 
-        label: 'Sequences', 
-        href: '/sequences', 
-        icon: '⚡',
-        description: 'Multi-step test flows' 
-      }
-    ]
+    label: 'Dashboard',
+    href: '/dashboard',
+    icon: FiHome,
   },
   {
-    title: 'EXECUTION',
-    items: [
-      { 
-        label: 'Active Tests', 
-        href: '/tests/running', 
-        icon: '▶️',
-        highlight: true,
-        description: 'Currently running tests' 
-      },
-      { 
-        label: 'Results', 
-        href: '/results', 
-        icon: '📊',
-        description: 'Test execution history' 
-      },
-    ]
-  }
+    label: 'Tests',
+    href: '/tests',
+    icon: FiList,
+  },
+  {
+    label: 'Sequences',
+    href: '/sequences',
+    icon: FiLayers,
+  },
+  {
+    label: 'Executions',
+    href: '/executions',
+    icon: FiPlay,
+  },
+  {
+    label: 'Agents',
+    href: '/agents',
+    icon: FiServer,
+  },
+  {
+    label: 'Environments',
+    href: '/environments',
+    icon: FiGitBranch,
+  },
+  {
+    label: 'Analytics',
+    href: '/analytics',
+    icon: FiActivity,
+  },
 ]
 
-const NavItem = ({ item }: { item: { label: string; href: string; icon: string; highlight?: boolean; description?: string } }) => {
+// NavItem component
+const NavItem = ({ item, onNavigate }: { 
+  item: { label: string; href: string; icon: any; };
+  onNavigate?: () => void;
+}) => {
   const pathname = usePathname()
-  const isActive = pathname === item.href
-  
+  const isActive = pathname === item.href || pathname?.startsWith(`${item.href}/`)
+  const Icon = item.icon
+
   return (
-    <Link href={item.href} style={{ width: '100%' }}>
-      <VStack
-        w="full"
-        px={3}
-        py={2}
-        spacing={1}
+    <Link href={item.href} onClick={onNavigate}>
+      <HStack
+        spacing={3}
+        px={4}
+        py={3}
         borderRadius="md"
-        cursor="pointer"
-        color={isActive ? 'primary.500' : 'gray.600'}
-        bg={isActive ? 'primary.50' : 'transparent'}
+        bg={isActive ? 'whiteAlpha.100' : 'transparent'}
+        color={isActive ? 'white' : 'gray.400'}
         _hover={{
-          bg: isActive ? 'primary.100' : 'gray.50',
+          bg: 'whiteAlpha.100',
+          color: 'white',
         }}
         transition="all 0.2s"
-        align="start"
+        cursor="pointer"
       >
-        <HStack spacing={3}>
-          <Text fontSize="lg" lineHeight="1">
-            {item.icon}
-          </Text>
-          <Text fontSize="sm" fontWeight={isActive ? '500' : '400'}>
-            {item.label}
-          </Text>
-          {item.highlight && (
-            <Badge colorScheme="green" variant="subtle" fontSize="xs">
-              Live
-            </Badge>
-          )}
-        </HStack>
-        {item.description && (
-          <Text fontSize="xs" color="gray.500" pl={8}>
-            {item.description}
-          </Text>
-        )}
-      </VStack>
+        <Box fontSize="lg">
+          <Icon />
+        </Box>
+        <Text fontWeight={isActive ? 'medium' : 'normal'}>
+          {item.label}
+        </Text>
+      </HStack>
     </Link>
   )
 }
 
-export default function Sidebar() {
+interface SidebarProps {
+  onNavigate?: () => void;
+}
+
+export default function Sidebar({ onNavigate }: SidebarProps) {
+  const isMobile = useBreakpointValue({ base: true, md: false })
+  
   return (
     <Box
       as="aside"
       w="240px"
       h="100vh"
-      bg="white"
+      bg="gray.800"
       borderRight="1px"
-      borderColor="gray.200"
-      position="fixed"
+      borderColor="gray.700"
+      position={isMobile ? 'relative' : 'fixed'}
       left={0}
       top={0}
       py={4}
+      boxShadow="sm"
+      overflowY="auto"
     >
       <VStack h="full" align="stretch" spacing={6}>
         <Box px={4}>
-          <Link href="/dashboard">
+          <Link href="/dashboard" onClick={onNavigate}>
             <HStack spacing={2}>
               <Text fontSize="xl" lineHeight="1">
                 🌐
               </Text>
-              <Text fontSize="lg" fontWeight="semibold" color="gray.900">
+              <Text 
+                fontWeight="bold" 
+                color="white"
+              >
                 Compass
               </Text>
             </HStack>
           </Link>
         </Box>
 
-        {SECTIONS.map((section) => (
-          <Box key={section.title}>
-            <Text px={4} py={2} fontSize="xs" fontWeight="500" color="gray.500">
-              {section.title}
-            </Text>
-            <VStack align="stretch" spacing={1}>
-              {section.items.map((item) => (
-                <NavItem key={item.href} item={item} />
-              ))}
-            </VStack>
-          </Box>
-        ))}
+        <Divider borderColor="gray.700" />
 
-        <Box mt="auto" px={3}>
-          <Link href="/import">
-            <Button
-              variant="solid"
-              colorScheme="primary"
-              size="sm"
-              width="full"
-              leftIcon={<Text>📄</Text>}
+        <VStack align="stretch" spacing={1}>
+          {NAV_ITEMS.map((item) => (
+            <NavItem key={item.label} item={item} onNavigate={onNavigate} />
+          ))}
+        </VStack>
+
+        <Box flex="1" />
+
+        <Divider borderColor="gray.700" />
+
+        <Box px={4} pb={2}>
+          <Link href="/settings" onClick={onNavigate}>
+            <HStack
+              spacing={3}
+              px={4}
+              py={3}
+              borderRadius="md"
+              color="gray.400"
+              _hover={{
+                bg: 'whiteAlpha.100',
+                color: 'white',
+              }}
+              transition="all 0.2s"
+              cursor="pointer"
             >
-              Import Scribe Test
-            </Button>
+              <Box fontSize="lg">
+                <FiSettings />
+              </Box>
+              <Text>Settings</Text>
+            </HStack>
           </Link>
         </Box>
       </VStack>

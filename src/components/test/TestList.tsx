@@ -18,6 +18,7 @@ import {
   MenuItem,
   IconButton,
   Button,
+  useColorModeValue,
 } from '@chakra-ui/react'
 import { SearchIcon, ChevronDownIcon } from '@chakra-ui/icons'
 import { TestCard } from './TestCard'
@@ -85,15 +86,27 @@ export function TestList({
 
   return (
     <VStack spacing={6} align="stretch">
-      <HStack spacing={4}>
+      <HStack spacing={4} flexWrap={{ base: 'wrap', md: 'nowrap' }}>
         <InputGroup maxW="320px">
           <InputLeftElement pointerEvents="none">
-            <SearchIcon color="gray.400" />
+            <SearchIcon color={useColorModeValue("gray.400", "gray.500")} />
           </InputLeftElement>
           <Input
             placeholder="Search tests..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            bg={useColorModeValue("white", "gray.800")}
+            borderColor={useColorModeValue("gray.200", "gray.700")}
+            _hover={{
+              borderColor: useColorModeValue("gray.300", "gray.600")
+            }}
+            _focus={{
+              borderColor: useColorModeValue("blue.500", "blue.400"),
+              boxShadow: useColorModeValue(
+                "0 0 0 1px rgba(66, 153, 225, 0.6)",
+                "0 0 0 1px rgba(99, 179, 237, 0.6)"
+              )
+            }}
           />
         </InputGroup>
 
@@ -101,6 +114,18 @@ export function TestList({
           maxW="200px"
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
+          bg={useColorModeValue("white", "gray.800")}
+          borderColor={useColorModeValue("gray.200", "gray.700")}
+          _hover={{
+            borderColor: useColorModeValue("gray.300", "gray.600")
+          }}
+          _focus={{
+            borderColor: useColorModeValue("blue.500", "blue.400"),
+            boxShadow: useColorModeValue(
+              "0 0 0 1px rgba(66, 153, 225, 0.6)",
+              "0 0 0 1px rgba(99, 179, 237, 0.6)"
+            )
+          }}
         >
           <option value="all">All Status</option>
           <option value="draft">Draft</option>
@@ -114,14 +139,33 @@ export function TestList({
             rightIcon={<ChevronDownIcon />}
             variant="outline"
             size="md"
+            borderColor={useColorModeValue("gray.200", "gray.700")}
+            _hover={{
+              bg: useColorModeValue("gray.50", "whiteAlpha.100"),
+              borderColor: useColorModeValue("gray.300", "gray.600")
+            }}
           >
             Sort by: {sortField}
           </MenuButton>
-          <MenuList>
-            <MenuItem onClick={() => handleSort('title')}>
+          <MenuList
+            bg={useColorModeValue("white", "gray.800")}
+            borderColor={useColorModeValue("gray.200", "gray.700")}
+            boxShadow="lg"
+          >
+            <MenuItem 
+              onClick={() => handleSort('title')}
+              _hover={{
+                bg: useColorModeValue("gray.50", "whiteAlpha.100")
+              }}
+            >
               Title {sortField === 'title' && (sortOrder === 'asc' ? '↑' : '↓')}
             </MenuItem>
-            <MenuItem onClick={() => handleSort('status')}>
+            <MenuItem 
+              onClick={() => handleSort('status')}
+              _hover={{
+                bg: useColorModeValue("gray.50", "whiteAlpha.100")
+              }}
+            >
               Status {sortField === 'status' && (sortOrder === 'asc' ? '↑' : '↓')}
             </MenuItem>
           </MenuList>
@@ -142,7 +186,7 @@ export function TestList({
               onClick={() => onTestClick(test._id || '')}
               onViewExecution={() => onViewExecution(test._id || '')}
               onDelete={() => onDeleteTest(test._id || '')}
-              hasActiveExecution={test._id ? activeExecutions.includes(test.id) : false}
+              hasActiveExecution={activeExecutions.includes(test._id || '')}
             />
           ))}
         </SimpleGrid>
@@ -150,12 +194,13 @@ export function TestList({
         <Box
           p={8}
           textAlign="center"
-          bg="white"
+          bg={useColorModeValue("white", "gray.800")}
           borderRadius="lg"
           border="1px"
-          borderColor="gray.200"
+          borderColor={useColorModeValue("gray.200", "gray.700")}
+          boxShadow="sm"
         >
-          <Text color="gray.500">
+          <Text color={useColorModeValue("gray.500", "gray.400")}>
             {searchQuery || statusFilter !== 'all'
               ? 'No tests match your search criteria'
               : 'No tests available'}

@@ -1,45 +1,28 @@
 'use client'
 
 import React, { useState } from 'react'
-import { Box, Flex, Heading, Button, Text, useToast, HStack, Badge } from '@chakra-ui/react'
-import { AppLayout } from '@/components/layout'
-import { TestList } from '@/components/test/TestList'
+import { Box, Button, Heading, Text, HStack, useToast } from '@chakra-ui/react'
 import { useRouter } from 'next/navigation'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import SimpleLayout from '@/components/layout/SimpleLayout'
+import { TestList } from '@/components/test/TestList'
 import { testsApi } from '@/api/tests'
 import { ErrorState, LoadingState } from '@/components/common'
+import NextLink from 'next/link'
+import { AddIcon } from '@chakra-ui/icons'
+import { FiFilter } from 'react-icons/fi'
 
 export default function TestsPage() {
   const router = useRouter()
   const toast = useToast()
   const queryClient = useQueryClient()
   const [activeExecutions, setActiveExecutions] = useState<string[]>(['1']) // Mock active execution for now
+  const [showFilters, setShowFilters] = useState(false)
 
   // Fetch tests
   const { data: tests, isLoading, error } = useQuery({
     queryKey: ['tests'],
-    queryFn: testsApi.getTests
-  })
-
-  // Delete mutation
-  const deleteMutation = useMutation({
-    mutationFn: testsApi.deleteTest,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tests'] })
-      toast({
-        title: 'Test deleted',
-        status: 'success',
-        duration: 3000,
-      })
-    },
-    onError: (error) => {
-      toast({
-        title: 'Failed to delete test',
-        description: error instanceof Error ? error.message : 'An error occurred',
-        status: 'error',
-        duration: 5000,
-      })
-    }
+    queryFn: testsApi.getTests,
   })
 
   const handleTestClick = (testId: string) => {
@@ -47,15 +30,17 @@ export default function TestsPage() {
   }
 
   const handleRunTest = (testId: string) => {
-    // Start test execution and navigate to execution page
+    // Mock implementation
     toast({
-      title: 'Starting test execution...',
-      description: `Initializing test ${testId}`,
-      status: 'info',
+      title: 'Test started',
+      description: `Test ${testId} is now running`,
+      status: 'success',
       duration: 3000,
+      isClosable: true,
     })
+    
+    // Add to active executions
     setActiveExecutions(prev => [...prev, testId])
-    router.push(`/tests/${testId}/run`)
   }
 
   const handleViewExecution = (testId: string) => {
@@ -63,82 +48,99 @@ export default function TestsPage() {
   }
 
   const handleDeleteTest = async (testId: string) => {
-    if (window.confirm('Are you sure you want to delete this test?')) {
-      await deleteMutation.mutateAsync(testId)
+    try {
+      await testsApi.deleteTest(testId)
+      queryClient.invalidateQueries({ queryKey: ['tests'] })
+      toast({
+        title: 'Test deleted',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      })
+    } catch (error) {
+      toast({
+        title: 'Error deleting test',
+        description: 'Please try again later',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
     }
   }
 
-  if (isLoading) {
-    return (
-      <AppLayout>
-        <Box py={8}>
-          <LoadingState message="Loading tests..." />
-        </Box>
-      </AppLayout>
-    )
-  }
-
-  if (error) {
-    return (
-      <AppLayout>
-        <Box p={8}>
-          <ErrorState 
-            title="Failed to load tests" 
-            message={error instanceof Error ? error.message : 'Unknown error'} 
-            onRetry={() => {
-              queryClient.invalidateQueries({ queryKey: ['tests'] })
-            }}
-          />
-        </Box>
-      </AppLayout>
-    )
-  }
-
   return (
-    <AppLayout>
-      <Box p={8}>
-        <Flex justify="space-between" align="center" mb={6}>
-          <Box>
-            <Heading size="lg" mb={2}>Test Cases</Heading>
-            <HStack spacing={4}>
-              <Text color="gray.600">Manage and organize your test cases</Text>
-              {activeExecutions.length > 0 && (
-                <Badge colorScheme="blue" px={2} py={1} borderRadius="full">
-                  {activeExecutions.length} Active Run{activeExecutions.length !== 1 ? 's' : ''}
-                </Badge>
-              )}
-            </HStack>
-          </Box>
+    <SimpleLayout>
+      <Box>
+        <Box mb={8}>
+          <Heading 
+            as="h1" 
+            size="xl" 
+            mb={4}
+            color="white"
+          >
+            Test Cases
+          </Heading>
+          <Text color="gray.400" mb={6}>
+            Manage your automated test cases and view their execution history
+          </Text>
           <HStack spacing={4}>
-            {activeExecutions.length > 0 && (
-              <Button
-                variant="outline"
+            <NextLink href="/import" passHref>
+              <Button 
+                leftIcon={<AddIcon />} 
                 colorScheme="blue"
-                size="md"
-                onClick={() => router.push('/tests/active')}
-                leftIcon={<span>⚡</span>}
+                as="a"
               >
-                View Active Runs
+                Import Test
               </Button>
-            )}
-            <Button
-              colorScheme="primary"
-              onClick={() => router.push('/import')}
+            </NextLink>
+            <Button 
+              variant="outline" 
+              leftIcon={<FiFilter />}
+              onClick={() => setShowFilters(!showFilters)}
             >
-              New Test Case
+              Filter
             </Button>
           </HStack>
-        </Flex>
-
-        <TestList
-          tests={tests || []}
-          onTestClick={handleTestClick}
-          onRunTest={handleRunTest}
-          onViewExecution={handleViewExecution}
-          onDeleteTest={handleDeleteTest}
-          activeExecutions={activeExecutions}
-        />
+        </Box>
+        
+        {isLoading ? (
+          <LoadingState message="Loading tests..." />
+        ) : error ? (
+          <ErrorState 
+            title="Failed to load tests" 
+            message="There was an error loading your tests. Please try again."
+            onRetry={() => queryClient.invalidateQueries({ queryKey: ['tests'] })}
+          />
+        ) : tests && tests.length > 0 ? (
+          <TestList 
+            tests={tests} 
+            onTestClick={handleTestClick}
+            onRunTest={handleRunTest}
+            onViewExecution={handleViewExecution}
+            onDeleteTest={handleDeleteTest}
+            activeExecutions={activeExecutions}
+          />
+        ) : (
+          <Box 
+            p={8} 
+            textAlign="center" 
+            borderRadius="lg"
+            bg="gray.800"
+            borderWidth="1px"
+            borderColor="gray.700"
+          >
+            <Text mb={4} color="gray.400">No tests found</Text>
+            <NextLink href="/import" passHref>
+              <Button 
+                colorScheme="blue"
+                as="a"
+              >
+                Import Your First Test
+              </Button>
+            </NextLink>
+          </Box>
+        )}
       </Box>
-    </AppLayout>
+    </SimpleLayout>
   )
 } 

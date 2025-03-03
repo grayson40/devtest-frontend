@@ -7,43 +7,66 @@ import Link from 'next/link'
 import { useAuth } from '@/context/AuthContext'
 import { useRouter } from 'next/navigation'
 
-export function Navbar() {
+interface NavbarProps {
+  children?: React.ReactNode;
+}
+
+export function Navbar({ children }: NavbarProps) {
   const { user, logout } = useAuth()
   const router = useRouter()
 
   return (
     <Box 
       as="nav" 
-      bg="white" 
+      bg="gray.800"
       borderBottom="1px" 
-      borderColor="gray.200"
+      borderColor="gray.700"
       position="sticky"
       top={0}
       zIndex={1000}
       px={4}
       py={2}
+      boxShadow="sm"
     >
       <Flex h={12} alignItems="center" gap={4}>
+        {/* Mobile Menu Button (passed as children) */}
+        {children}
+        
         {/* Quick Actions */}
-        <HStack spacing={2} mr={6} />
+        <HStack spacing={2} mr={6}>
+          <Link href="/dashboard">
+            <HStack spacing={2} cursor="pointer">
+              <Text fontSize="xl" lineHeight="1">
+                🌐
+              </Text>
+              <Text 
+                fontWeight="semibold" 
+                display={{ base: 'none', md: 'block' }}
+                color="white"
+              >
+                Compass
+              </Text>
+            </HStack>
+          </Link>
+        </HStack>
 
         {/* Search Bar */}
-        <InputGroup maxW="320px">
+        <InputGroup maxW={{ base: "140px", md: "320px" }}>
           <InputLeftElement pointerEvents="none">
-            <SearchIcon color="gray.400" />
+            <SearchIcon color="gray.500" />
           </InputLeftElement>
           <Input
-            placeholder="Search tests, tickets, or sequences..."
+            placeholder="Search tests..."
             size="sm"
-            bg="gray.50"
+            bg="gray.700"
             border="1px"
-            borderColor="gray.200"
-            _placeholder={{ color: 'gray.500' }}
-            _hover={{ bg: 'gray.100' }}
+            borderColor="gray.600"
+            _placeholder={{ color: "gray.400" }}
+            _hover={{ bg: "gray.600" }}
             _focus={{ 
-              bg: 'white',
-              borderColor: 'primary.500',
-              boxShadow: 'none'
+              bg: "gray.700",
+              borderColor: "primary.500",
+              boxShadow: "none"
             }}
             borderRadius="md"
           />
@@ -55,24 +78,24 @@ export function Navbar() {
             <MenuButton
               as={Button}
               size="sm"
-              colorScheme="primary"
+              colorScheme="blue"
               rightIcon={<ChevronDownIcon />}
               leftIcon={<AddIcon />}
             >
               Create
             </MenuButton>
-            <MenuList p={2}>
+            <MenuList p={2} boxShadow="lg" borderColor="gray.700" bg="gray.800">
               <Link href="/import">
                 <MenuItem 
                   icon={<Text fontSize="xl">🧪</Text>}
                   borderRadius="md"
                   _hover={{
-                    bg: 'primary.50',
+                    bg: "whiteAlpha.100",
                   }}
                 >
                   <Box>
                     <Text fontWeight="medium">Test Case</Text>
-                    <Text fontSize="xs" color="gray.500">Record and automate tests</Text>
+                    <Text fontSize="xs" color="gray.400">Record and automate tests</Text>
                   </Box>
                 </MenuItem>
               </Link>
@@ -81,12 +104,12 @@ export function Navbar() {
                   icon={<Text fontSize="xl">⚡</Text>}
                   borderRadius="md"
                   _hover={{
-                    bg: 'primary.50',
+                    bg: "whiteAlpha.100",
                   }}
                 >
                   <Box>
                     <Text fontWeight="medium">Test Sequence</Text>
-                    <Text fontSize="xs" color="gray.500">Chain multiple tests together</Text>
+                    <Text fontSize="xs" color="gray.400">Chain multiple tests together</Text>
                   </Box>
                 </MenuItem>
               </Link>
@@ -97,27 +120,41 @@ export function Navbar() {
           <Menu>
             <MenuButton
               as={Button}
-              size="sm"
               variant="ghost"
-              px={2}
-              _hover={{ bg: 'gray.100' }}
+              size="sm"
+              _hover={{
+                bg: "whiteAlpha.200",
+              }}
             >
               <HStack spacing={2}>
-                <Avatar size="xs" name="User" bg="primary.500" />
+                <Avatar 
+                  size="xs" 
+                  name={user?.name || "User"} 
+                  bg="blue.500"
+                  color="white"
+                />
+                <Text display={{ base: 'none', md: 'block' }}>
+                  {user?.name || user?.email || 'User'}
+                </Text>
                 <ChevronDownIcon />
               </HStack>
             </MenuButton>
-            <MenuList p={2} minW="200px">
+            <MenuList
+              shadow="lg"
+              py={1}
+              bg="gray.800"
+              borderColor="gray.700"
+            >
               <Box px={3} py={2} mb={2}>
-                <Text fontWeight="medium">{user?.name}</Text>
-                <Text fontSize="sm" color="gray.500">{user?.email}</Text>
+                <Text fontWeight="medium">{user?.name || "User"}</Text>
+                <Text fontSize="sm" color="gray.400">{user?.email || "user@example.com"}</Text>
               </Box>
               <Divider mb={2} />
               <MenuItem
                 icon={<Text>⚙️</Text>}
                 borderRadius="md"
                 _hover={{
-                  bg: 'gray.50',
+                  bg: "whiteAlpha.100",
                 }}
                 onClick={() => router.push('/settings')}
               >
@@ -126,9 +163,9 @@ export function Navbar() {
               <MenuItem
                 icon={<Text>👋</Text>}
                 borderRadius="md"
-                color="red.500"
+                color="red.300"
                 _hover={{
-                  bg: 'red.50',
+                  bg: "red.900",
                 }}
                 onClick={() => {
                   logout()

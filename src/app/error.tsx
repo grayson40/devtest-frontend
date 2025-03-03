@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { Box } from '@chakra-ui/react'
-import { AppLayout } from '@/components/layout'
+import { SimpleLayout } from '@/components/layout'
 import { ErrorState } from '@/components/common'
 
 export default function Error({
@@ -13,7 +13,7 @@ export default function Error({
   reset: () => void
 }) {
   return (
-    <AppLayout>
+    <SimpleLayout>
       <Box py={8}>
         <ErrorState
           title="Something went wrong"
@@ -21,6 +21,6 @@ export default function Error({
           onRetry={reset}
         />
       </Box>
-    </AppLayout>
+    </SimpleLayout>
   )
 } 

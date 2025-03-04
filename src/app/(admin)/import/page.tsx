@@ -39,6 +39,7 @@ import {
   IconButton,
   Tooltip,
   Spinner,
+  SimpleGrid,
 } from '@chakra-ui/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -47,22 +48,20 @@ import { testsApi } from '@/api/tests'
 import { FiClipboard, FiCheckCircle, FiChevronDown, FiChevronUp, FiPlay, FiInfo } from 'react-icons/fi'
 import { useAuth } from '@/context/AuthContext'
 import { AuthModal } from '@/components/auth/AuthModal'
+import { FaFileExcel, FaCode } from 'react-icons/fa'
+import { DownloadIcon, ViewIcon, RepeatIcon, AddIcon, InfoIcon, CheckIcon, CopyIcon } from '@chakra-ui/icons'
 
 export default function ImportPage() {
   const [htmlContent, setHtmlContent] = useState<string>('')
   const [isValidating, setIsValidating] = useState(false)
-  const [showPreview, setShowPreview] = useState(false)
-  const [previewSteps, setPreviewSteps] = useState<any[]>([])
   const [showHelp, setShowHelp] = useState(false)
   const [activeTab, setActiveTab] = useState(0)
   const [showAuth, setShowAuth] = useState(false)
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('signup')
-  const [previewTab, setPreviewTab] = useState<'steps' | 'logs' | 'code'>('steps')
-  const [isRunningDemo, setIsRunningDemo] = useState(false)
-  const [demoProgress, setDemoProgress] = useState(0)
-  const [demoLogs, setDemoLogs] = useState<Array<{message: string, level: 'info' | 'error' | 'warning' | 'debug', timestamp: string}>>([])
   const [createdTestId, setCreatedTestId] = useState<string | null>(null)
   const [isExecutingTest, setIsExecutingTest] = useState(false)
+  const [playwrightCode, setPlaywrightCode] = useState<string>('')
+  const [practiTestFormat, setPractiTestFormat] = useState<string>('')
   const { onCopy, hasCopied } = useClipboard("")
   const toast = useToast()
   const router = useRouter()
@@ -147,7 +146,58 @@ export default function ImportPage() {
   const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const content = e.clipboardData.getData('text')
     setHtmlContent(content)
-    processHtmlContent(content)
+    
+    // Immediately process and create test when content is pasted
+    if (content) {
+      if (!user) {
+        setAuthMode('signup')
+        setShowAuth(true)
+        return
+      }
+
+      setIsValidating(true)
+      try {
+        // Validate HTML content
+        const isValid = validateHtml(content)
+        if (!isValid) {
+          toast({
+            title: 'Invalid HTML',
+            description: 'The pasted content does not appear to be valid Scribe HTML.',
+            status: 'error',
+            duration: 5000,
+          })
+          setIsValidating(false)
+          return
+        }
+
+        // Create test directly
+        const createdTest = await createTestMutation.mutateAsync({ html: content })
+        
+        if (createdTest && createdTest._id) {
+          toast({
+            title: 'Test created successfully',
+            description: 'Redirecting to test details...',
+            status: 'success',
+            duration: 3000,
+          })
+          
+          // Invalidate queries to refresh data
+          queryClient.invalidateQueries({ queryKey: ['tests'] })
+          
+          // Navigate to test detail page
+          router.push(`/tests/${createdTest._id}`)
+        }
+      } catch (error) {
+        toast({
+          title: 'Error creating test',
+          description: error instanceof Error ? error.message : 'An unknown error occurred',
+          status: 'error',
+          duration: 5000,
+        })
+      } finally {
+        setIsValidating(false)
+      }
+    }
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -159,10 +209,13 @@ export default function ImportPage() {
     setIsValidating(true)
 
     try {
-      if (!validateHtml(content)) {
+      // We're not showing preview anymore, but we still need to validate the HTML
+      const isValid = validateHtml(content)
+      
+      if (!isValid) {
         toast({
-          title: 'Invalid Scribe content',
-          description: 'Please copy the complete content from your Scribe recording',
+          title: 'Invalid HTML',
+          description: 'The pasted content does not appear to be valid Scribe HTML.',
           status: 'error',
           duration: 5000,
         })
@@ -170,24 +223,55 @@ export default function ImportPage() {
         return
       }
 
-      // Parse the HTML to extract steps
+      // We don't need to parse steps for preview anymore
+      // Just validate that it's processable
       const steps = parseScribeHtml(content)
-      setPreviewSteps(steps)
       
-      // Simulate validation delay for better UX
-      await new Promise(resolve => setTimeout(resolve, 800))
+      if (!steps || steps.length === 0) {
+        toast({
+          title: 'No steps found',
+          description: 'Could not extract test steps from the HTML content.',
+          status: 'error',
+          duration: 5000,
+        })
+        setIsValidating(false)
+        return
+      }
       
-      // Show preview instead of creating test immediately
-      setShowPreview(true)
+      // Success validation
+      toast({
+        title: 'HTML validated',
+        description: 'The HTML content is valid and ready to create a test.',
+        status: 'success',
+        duration: 3000,
+      })
+      
       setIsValidating(false)
     } catch (error) {
       toast({
-        title: 'Error processing content',
-        description: 'Failed to process Scribe content. Please try again.',
+        title: 'Error processing HTML',
+        description: error instanceof Error ? error.message : 'An unknown error occurred',
         status: 'error',
         duration: 5000,
       })
       setIsValidating(false)
+    }
+  }
+
+  const fetchTestDetails = async (testId: string) => {
+    try {
+      const test = await testsApi.getTest(testId)
+      
+      // Generate Playwright code from the test steps
+      if (test && test.steps) {
+        const code = generatePlaywrightCode(test.steps)
+        setPlaywrightCode(code)
+        
+        const practiTest = JSON.stringify(generatePractiTestFormat(test.steps), null, 2)
+        setPractiTestFormat(practiTest)
+      }
+    } catch (error) {
+      console.error('Error fetching test details:', error)
     }
   }
 
@@ -202,12 +286,16 @@ export default function ImportPage() {
       const createdTest = await createTestMutation.mutateAsync({ html: htmlContent })
       
       // Set the created test ID
-      if (createdTest && createdTest.id) {
-        setCreatedTestId(createdTest.id)
+      if (createdTest && createdTest._id) {
+        // Set the created test ID immediately to show success state
+        setCreatedTestId(createdTest._id)
+        
+        // Fetch test details to display code
+        fetchTestDetails(createdTest._id)
         
         toast({
           title: 'Test created successfully',
-          description: 'Your test has been created. Preparing to run...',
+          description: 'Your test has been created with Excel export and Playwright script. Preparing to run...',
           status: 'success',
           duration: 3000,
         })
@@ -218,58 +306,138 @@ export default function ImportPage() {
           
           // Automatically execute the test with default environment
           await executeTestMutation.mutateAsync({ 
-            id: createdTest.id, 
+            id: createdTest._id, 
             environment: 'cloud' 
           })
           
-          // Invalidate queries to ensure fresh data
-          queryClient.invalidateQueries({ queryKey: ['results', createdTest.id] })
+          setIsExecutingTest(false)
           
           toast({
             title: 'Test execution started',
-            description: 'Your test is now running. Redirecting to the execution page...',
+            description: 'Your test is now running. You can download the generated files from the success screen.',
             status: 'success',
             duration: 3000,
           })
           
-          // Redirect to the test run page after a short delay
-          setTimeout(() => {
-            router.push(`/tests/${createdTest.id}/run`)
-          }, 1500)
+          // Invalidate queries to refresh data
+          queryClient.invalidateQueries({ queryKey: ['tests'] })
+          
+          // We no longer automatically redirect - let the user choose from the success screen
         } catch (execError) {
           // Reset executing state
           setIsExecutingTest(false)
           
-          console.error('Error executing test:', execError)
           toast({
             title: 'Test created but execution failed',
-            description: 'Your test was created but we couldn\'t start execution. You can run it manually.',
+            description: 'Your test was created successfully with downloadable files, but we couldn\'t start execution. You can run it manually.',
             status: 'warning',
             duration: 5000,
           })
           
-          // Still redirect to the test page
-          setTimeout(() => {
-            router.push(`/tests/${createdTest.id}`)
-          }, 1500)
+          // We no longer automatically redirect - let the user choose from the success screen
         }
       } else {
         toast({
-          title: 'Test created but no ID returned',
-          description: 'The test was created but we couldn\'t get its ID. Please check the tests page.',
-          status: 'warning',
+          title: 'Error creating test',
+          description: 'Failed to create test. Please try again.',
+          status: 'error',
           duration: 5000,
         })
-        
-        // Redirect to tests page instead
-        setTimeout(() => {
-          router.push('/tests')
-        }, 1500)
       }
     } catch (error) {
       toast({
         title: 'Error creating test',
-        description: 'Failed to create test. Please try again.',
+        description: error instanceof Error ? error.message : 'An unknown error occurred',
+        status: 'error',
+        duration: 5000,
+      })
+    }
+  }
+
+  // Handler for creating and downloading Playwright test
+  const handleCreateAndDownloadPlaywright = async () => {
+    if (!user) {
+      setAuthMode('signup')
+      setShowAuth(true)
+      return
+    }
+    
+    try {
+      const createdTest = await createTestMutation.mutateAsync({ html: htmlContent })
+      
+      if (createdTest && createdTest._id) {
+        // Set the created test ID
+        setCreatedTestId(createdTest._id)
+        
+        toast({
+          title: 'Test created successfully',
+          description: 'Downloading Playwright test file...',
+          status: 'success',
+          duration: 3000,
+        })
+        
+        // Download the Playwright test file
+        testsApi.downloadPlaywrightTest(createdTest._id)
+        
+        // Invalidate queries to refresh data
+        queryClient.invalidateQueries({ queryKey: ['tests'] })
+      } else {
+        toast({
+          title: 'Error creating test',
+          description: 'Failed to create test. Please try again.',
+          status: 'error',
+          duration: 5000,
+        })
+      }
+    } catch (error) {
+      toast({
+        title: 'Error creating test',
+        description: error instanceof Error ? error.message : 'An unknown error occurred',
+        status: 'error',
+        duration: 5000,
+      })
+    }
+  }
+  
+  // Handler for creating and downloading PractiTest export
+  const handleCreateAndDownloadPractiTest = async () => {
+    if (!user) {
+      setAuthMode('signup')
+      setShowAuth(true)
+      return
+    }
+    
+    try {
+      const createdTest = await createTestMutation.mutateAsync({ html: htmlContent })
+      
+      if (createdTest && createdTest._id) {
+        // Set the created test ID
+        setCreatedTestId(createdTest._id)
+        
+        toast({
+          title: 'Test created successfully',
+          description: 'Downloading PractiTest export file...',
+          status: 'success',
+          duration: 3000,
+        })
+        
+        // Download the PractiTest export file
+        testsApi.downloadPractiTestExport(createdTest._id)
+        
+        // Invalidate queries to refresh data
+        queryClient.invalidateQueries({ queryKey: ['tests'] })
+      } else {
+        toast({
+          title: 'Error creating test',
+          description: 'Failed to create test. Please try again.',
+          status: 'error',
+          duration: 5000,
+        })
+      }
+    } catch (error) {
+      toast({
+        title: 'Error creating test',
+        description: error instanceof Error ? error.message : 'An unknown error occurred',
         status: 'error',
         duration: 5000,
       })
@@ -281,69 +449,6 @@ export default function ImportPage() {
     onCopy()
     processHtmlContent(exampleHtml)
   }
-
-  const runDemoTest = () => {
-    if (isRunningDemo) return;
-    
-    setIsRunningDemo(true);
-    setDemoProgress(0);
-    setDemoLogs([]);
-    
-    // Simulate test execution with logs
-    const totalSteps = previewSteps.length;
-    let currentStep = 0;
-    
-    const addLog = (message: string, level: 'info' | 'error' | 'warning' | 'debug' = 'info') => {
-      setDemoLogs(prev => [...prev, {
-        message,
-        level,
-        timestamp: new Date().toISOString()
-      }]);
-    };
-    
-    addLog('Initializing browser session...', 'info');
-    
-    const interval = setInterval(() => {
-      if (currentStep < totalSteps) {
-        const step = previewSteps[currentStep];
-        const progress = Math.round(((currentStep + 1) / totalSteps) * 100);
-        
-        setDemoProgress(progress);
-        
-        // Add logs based on the step type
-        addLog(`Executing step ${currentStep + 1}: ${step.action}`, 'info');
-        
-        if (step.selector) {
-          addLog(`Looking for element: ${step.selector}`, 'debug');
-          
-          // Randomly add some waiting logs
-          if (Math.random() > 0.7) {
-            addLog(`Waiting for element to be visible: ${step.selector}`, 'debug');
-          }
-        }
-        
-        if (step.value) {
-          addLog(`Input value: ${step.value}`, 'debug');
-        }
-        
-        // Randomly add some warnings
-        if (Math.random() > 0.8) {
-          addLog('Element took longer than expected to respond', 'warning');
-        }
-        
-        // Add success log
-        addLog(`Successfully completed step ${currentStep + 1}`, 'info');
-        
-        currentStep++;
-      } else {
-        clearInterval(interval);
-        addLog('Test execution completed successfully!', 'info');
-        setIsRunningDemo(false);
-      }
-    }, 1500);
-    
-    return () => clearInterval(interval);
-  };
 
   const generatePlaywrightCode = (steps: any[]) => {
     return `import { test, expect } from '@playwright/test';
@@ -404,318 +509,49 @@ ${steps.map((step, index) => {
     </Collapse>
   )
 
-  // Preview mode UI
-  if (showPreview) {
-    return (
-      <>
-        <VStack spacing={6} align="stretch">
-          <Breadcrumb>
-            <BreadcrumbItem>
-              <BreadcrumbLink as={Link} href="/">Home</BreadcrumbLink>
-            </BreadcrumbItem>
-            <BreadcrumbItem>
-              <BreadcrumbLink as={Link} href="/import" onClick={() => setShowPreview(false)}>Import Test</BreadcrumbLink>
-            </BreadcrumbItem>
-            <BreadcrumbItem isCurrentPage>
-              <BreadcrumbLink>Preview</BreadcrumbLink>
-            </BreadcrumbItem>
-          </Breadcrumb>
-
-          <Flex justify="space-between" align="center">
-            <Box>
-              <Heading size="lg">Test Preview</Heading>
-              <Text color="gray.600">
-                Review your test before creating it
-              </Text>
-            </Box>
-            <HStack>
-              <Button 
-                variant="outline" 
-                onClick={() => setShowPreview(false)}
-              >
-                Edit
-              </Button>
-              <Button 
-                colorScheme="primary"
-                leftIcon={<Icon as={FiPlay} />}
-                onClick={handleCreateTest}
-                isLoading={createTestMutation.isPending}
-              >
-                Create Test
-              </Button>
-            </HStack>
-          </Flex>
-
-          <Tabs variant="enclosed" colorScheme="primary" onChange={(index) => {
-            setPreviewTab(['steps', 'logs', 'code'][index] as 'steps' | 'logs' | 'code');
-          }}>
-            <TabList>
-              <Tab>Test Steps</Tab>
-              <Tab>Execution Logs</Tab>
-              <Tab>Generated Code</Tab>
-            </TabList>
-            <TabPanels>
-              {/* Test Steps Panel */}
-              <TabPanel p={4}>
-                <VStack spacing={4} align="stretch">
-                  <Alert status="info" borderRadius="md">
-                    <AlertIcon />
-                    <Box>
-                      <AlertTitle>Test Preview</AlertTitle>
-                      <AlertDescription>
-                        We've parsed your Scribe recording and created the following test steps.
-                        {!user && " Sign up to save this test and run it in our cloud environment."}
-                      </AlertDescription>
-                    </Box>
-                  </Alert>
-
-                  <Box>
-                    <VStack spacing={3} align="stretch">
-                      {previewSteps.map((step, index) => (
-                        <Box 
-                          key={index} 
-                          p={3} 
-                          borderWidth="1px" 
-                          borderRadius="md"
-                          borderColor="gray.700"
-                          bg="gray.800"
-                        >
-                          <HStack mb={1}>
-                            <Badge colorScheme="blue">Step {index + 1}</Badge>
-                            <Text fontWeight="medium" color="white">{step.action}</Text>
-                          </HStack>
-                          {step.selector && (
-                            <Text fontSize="sm" color="gray.400">
-                              Selector: <Text as="span" fontFamily="mono" fontSize="xs">{step.selector}</Text>
-                            </Text>
-                          )}
-                          {step.value && (
-                            <Text fontSize="sm" color="gray.400">
-                              Value: <Text as="span" fontFamily="mono" fontSize="xs">{step.value}</Text>
-                            </Text>
-                          )}
-                        </Box>
-                      ))}
-                    </VStack>
-                  </Box>
-                </VStack>
-              </TabPanel>
-
-              {/* Execution Logs Panel */}
-              <TabPanel p={4}>
-                <VStack spacing={4} align="stretch">
-                  <Flex justify="space-between" align="center">
-                    <Text fontWeight="medium">Test Execution Logs</Text>
-                    <Button 
-                      size="sm" 
-                      leftIcon={<Icon as={FiPlay} />} 
-                      colorScheme="primary" 
-                      isLoading={isRunningDemo}
-                      loadingText="Running..."
-                      onClick={runDemoTest}
-                      isDisabled={isRunningDemo}
-                    >
-                      Run Demo Test
-                    </Button>
-                  </Flex>
-
-                  {isRunningDemo && (
-                    <Box mb={4}>
-                      <Text fontSize="sm" mb={1}>Progress: {demoProgress}%</Text>
-                      <Progress value={demoProgress} size="sm" colorScheme="primary" borderRadius="full" />
-                    </Box>
-                  )}
-
-                  <Box 
-                    borderWidth="1px" 
-                    borderRadius="md" 
-                    p={3} 
-                    bg="gray.900" 
-                    color="gray.100"
-                    fontFamily="mono"
-                    fontSize="xs"
-                    height="400px"
-                    overflowY="auto"
-                  >
-                    {demoLogs.length > 0 ? (
-                      demoLogs.map((log, index) => (
-                        <Text 
-                          key={index} 
-                          color={
-                            log.level === 'error' ? 'red.300' : 
-                            log.level === 'warning' ? 'yellow.300' : 
-                            log.level === 'debug' ? 'gray.400' : 
-                            'green.300'
-                          }
-                          mb={1}
-                        >
-                          [{new Date(log.timestamp).toLocaleTimeString()}] {log.message}
-                        </Text>
-                      ))
-                    ) : (
-                      <VStack spacing={4} justify="center" height="100%">
-                        <Text color="gray.500">Click "Run Demo Test" to see execution logs</Text>
-                      </VStack>
-                    )}
-                  </Box>
-
-                  {!user && (
-                    <Alert status="warning" variant="subtle" borderRadius="md">
-                      <AlertIcon />
-                      <Box>
-                        <AlertTitle>Demo Mode</AlertTitle>
-                        <AlertDescription>
-                          This is a simulated test run. Sign up to run real tests in our cloud environment.
-                        </AlertDescription>
-                      </Box>
-                    </Alert>
-                  )}
-                </VStack>
-              </TabPanel>
-
-              {/* Generated Code Panel */}
-              <TabPanel p={4}>
-                <VStack spacing={4} align="stretch">
-                  <Tabs variant="soft-rounded" colorScheme="blue" size="sm">
-                    <TabList>
-                      <Tab>Playwright</Tab>
-                      <Tab>PractiTest Format</Tab>
-                    </TabList>
-                    <TabPanels>
-                      <TabPanel p={0} pt={4}>
-                        <Box position="relative">
-                          <Box 
-                            borderWidth="1px" 
-                            borderRadius="md" 
-                            p={3} 
-                            bg="gray.900" 
-                            color="gray.100"
-                            fontFamily="mono"
-                            fontSize="xs"
-                            height="400px"
-                            overflowY="auto"
-                            filter={!user ? "blur(3px)" : "none"}
-                            userSelect={!user ? "none" : "auto"}
-                          >
-                            <pre>{generatePlaywrightCode(previewSteps)}</pre>
-                          </Box>
-                          
-                          {!user && (
-                            <Box 
-                              position="absolute" 
-                              top="0" 
-                              left="0" 
-                              right="0" 
-                              bottom="0" 
-                              display="flex" 
-                              alignItems="center" 
-                              justifyContent="center"
-                              zIndex={2}
-                            >
-                              <VStack spacing={3} bg="white" p={4} borderRadius="md" boxShadow="lg">
-                                <Icon as={FiPlay} boxSize={8} color="primary.500" />
-                                <Text fontWeight="medium">Sign up to access generated code</Text>
-                                <Button 
-                                  colorScheme="primary" 
-                                  size="sm"
-                                  onClick={() => {
-                                    setAuthMode('signup');
-                                    setShowAuth(true);
-                                  }}
-                                >
-                                  Sign Up Now
-                                </Button>
-                              </VStack>
-                            </Box>
-                          )}
-                        </Box>
-                      </TabPanel>
-                      <TabPanel p={0} pt={4}>
-                        <Box position="relative">
-                          <Box 
-                            borderWidth="1px" 
-                            borderRadius="md" 
-                            p={3} 
-                            bg="gray.900" 
-                            color="gray.100"
-                            fontFamily="mono"
-                            fontSize="xs"
-                            height="400px"
-                            overflowY="auto"
-                            filter={!user ? "blur(3px)" : "none"}
-                            userSelect={!user ? "none" : "auto"}
-                          >
-                            <pre>{JSON.stringify(generatePractiTestFormat(previewSteps), null, 2)}</pre>
-                          </Box>
-                          
-                          {!user && (
-                            <Box 
-                              position="absolute" 
-                              top="0" 
-                              left="0" 
-                              right="0" 
-                              bottom="0" 
-                              display="flex" 
-                              alignItems="center" 
-                              justifyContent="center"
-                              zIndex={2}
-                            >
-                              <VStack spacing={3} bg="white" p={4} borderRadius="md" boxShadow="lg">
-                                <Icon as={FiPlay} boxSize={8} color="primary.500" />
-                                <Text fontWeight="medium">Sign up to access PractiTest format</Text>
-                                <Button 
-                                  colorScheme="primary" 
-                                  size="sm"
-                                  onClick={() => {
-                                    setAuthMode('signup');
-                                    setShowAuth(true);
-                                  }}
-                                >
-                                  Sign Up Now
-                                </Button>
-                              </VStack>
-                            </Box>
-                          )}
-                        </Box>
-                      </TabPanel>
-                    </TabPanels>
-                  </Tabs>
-                </VStack>
-              </TabPanel>
-            </TabPanels>
-          </Tabs>
-
-          <HStack justify="center" spacing={4}>
-            <Button 
-              variant="outline" 
-              onClick={() => setShowPreview(false)}
-            >
-              Back to Edit
-            </Button>
-            <Button 
-              colorScheme="primary"
-              leftIcon={<Icon as={FiPlay} />}
-              onClick={handleCreateTest}
-              isLoading={createTestMutation.isPending}
-              size="lg"
-            >
-              {user ? 'Create and Run Test' : 'Sign Up to Create Test'}
-            </Button>
-          </HStack>
-        </VStack>
-
-        <AuthModal
-          isOpen={showAuth}
-          onClose={() => setShowAuth(false)}
-          defaultMode={authMode}
-        />
-      </>
-    )
-  }
-
   // Render the success state after test creation
   const renderSuccessState = () => {
-    if (!createdTestId) return null
+    if (!createdTestId) return null;
+    
+    // Show loading state when test is executing
+    if (isExecutingTest) {
+      return (
+        <Box 
+          position="fixed"
+          top={0}
+          left={0}
+          right={0}
+          bottom={0}
+          bg="blackAlpha.700"
+          zIndex={1000}
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+        >
+          <Box 
+            bg="gray.800" 
+            p={8} 
+            borderRadius="lg" 
+            maxW="md" 
+            w="full"
+            boxShadow="xl"
+            textAlign="center"
+          >
+            <VStack spacing={6}>
+              <Spinner size="xl" color="blue.400" thickness="4px" />
+              <Heading size="lg" color="white">Preparing Test...</Heading>
+              <Text color="gray.300">Your test has been created and is being prepared for execution.</Text>
+              <Progress 
+                isIndeterminate 
+                colorScheme="blue" 
+                width="100%" 
+                borderRadius="md"
+              />
+            </VStack>
+          </Box>
+        </Box>
+      );
+    }
     
     return (
       <Box 
@@ -729,206 +565,266 @@ ${steps.map((step, index) => {
         display="flex"
         alignItems="center"
         justifyContent="center"
+        p={4}
       >
         <Box 
           bg="gray.800" 
           p={8} 
           borderRadius="lg" 
-          maxW="md" 
+          maxW="900px" 
           w="full"
           boxShadow="xl"
-          textAlign="center"
+          overflowY="auto"
+          maxH="90vh"
         >
-          <VStack spacing={6}>
-            {isExecutingTest ? (
-              <>
-                <Spinner size="xl" color="blue.400" thickness="4px" />
-                <Heading size="lg">Preparing Test...</Heading>
-                <Text>Your test has been created and is being prepared for execution.</Text>
-                <Progress 
-                  isIndeterminate 
-                  colorScheme="blue" 
-                  width="100%" 
-                  borderRadius="md"
-                />
-              </>
-            ) : (
-              <>
-                <Icon as={FiCheckCircle} boxSize={16} color="green.400" />
-                <Heading size="lg">Test Created!</Heading>
-                <Text>Your test has been created successfully and is ready to run.</Text>
-                <HStack spacing={4}>
-                  <Button
-                    as={Link}
-                    href={`/tests/${createdTestId}`}
-                    variant="outline"
+        <VStack spacing={6} align="stretch">
+            <Flex align="center" justify="center" direction="column">
+              <Box 
+                bg="green.400" 
+                color="white" 
+                p={3} 
+                borderRadius="full" 
+                mb={4}
+              >
+                <CheckIcon boxSize={8} />
+              </Box>
+              <Heading size="lg" textAlign="center" mb={2} color="white">Test Case Created Successfully!</Heading>
+              <Text textAlign="center" color="gray.300" mb={4}>
+                Your test case has been created and is ready to use.
+              </Text>
+            </Flex>
+
+            <Divider my={4} />
+
+            <Tabs variant="enclosed" colorScheme="blue">
+              <TabList>
+                <Tab color="gray.300" _selected={{ color: "white", bg: "blue.600" }}>Generated Files</Tab>
+                <Tab color="gray.300" _selected={{ color: "white", bg: "purple.600" }}>Playwright Code</Tab>
+                <Tab color="gray.300" _selected={{ color: "white", bg: "green.600" }}>PractiTest Format</Tab>
+              </TabList>
+              
+              <TabPanels>
+                {/* Generated Files Tab */}
+                <TabPanel p={4} bg="gray.700" borderRadius="md" mt={2}>
+                  <VStack spacing={6} align="stretch">
+            <HStack>
+                      <Icon as={FaFileExcel} color="green.400" boxSize={5} />
+                      <Text flex="1" color="gray.200">PractiTest Excel Export</Text>
+              <Button 
+                        size="sm" 
+                        colorScheme="green" 
+                        leftIcon={<DownloadIcon />}
+                        onClick={() => testsApi.downloadPractiTestExport(createdTestId)}
+                      >
+                        Download
+              </Button>
+                    </HStack>
+                    
+                    <HStack>
+                      <Icon as={FaCode} color="purple.400" boxSize={5} />
+                      <Text flex="1" color="gray.200">Playwright Test Script</Text>
+              <Button 
+                        size="sm" 
+                        colorScheme="purple" 
+                        leftIcon={<DownloadIcon />}
+                        onClick={() => testsApi.downloadPlaywrightTest(createdTestId)}
+                      >
+                        Download
+              </Button>
+            </HStack>
+                    
+                    <Box mt={4} p={4} bg="gray.600" borderRadius="md">
+                      <Heading size="sm" mb={3} color="white">Next Steps</Heading>
+                      <HStack spacing={4}>
+                        <Button 
+                          leftIcon={<ViewIcon />} 
+                          colorScheme="blue" 
+                          size="sm"
+                          onClick={() => router.push(`/tests/${createdTestId}`)}
+                        >
+                          View Test Details
+                        </Button>
+                        
+                        <Button 
+                          leftIcon={<RepeatIcon />} 
+                          colorScheme="blue"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => router.push(`/tests/${createdTestId}/run`)}
+                        >
+                          Run Test
+                        </Button>
+                          </HStack>
+                  </Box>
+                </VStack>
+              </TabPanel>
+
+                {/* Playwright Code Tab */}
+                <TabPanel p={4} bg="gray.700" borderRadius="md" mt={2}>
+                <VStack spacing={4} align="stretch">
+                  <Flex justify="space-between" align="center">
+                      <Heading size="sm" color="white">Playwright Test Script</Heading>
+                      <HStack>
+                        <Button 
+                          size="sm" 
+                          colorScheme="purple" 
+                          leftIcon={<DownloadIcon />}
+                          onClick={() => testsApi.downloadPlaywrightTest(createdTestId)}
+                        >
+                          Download
+                        </Button>
+                    <Button 
+                      size="sm" 
+                          colorScheme="blue" 
+                          leftIcon={<CopyIcon />}
+                          onClick={() => {
+                            if (playwrightCode) {
+                              navigator.clipboard.writeText(playwrightCode);
+                              toast({
+                                title: 'Code copied to clipboard',
+                                status: 'success',
+                                duration: 2000,
+                              });
+                            }
+                          }}
+                          isDisabled={!playwrightCode}
+                        >
+                          Copy Code
+                    </Button>
+                      </HStack>
+                  </Flex>
+
+                  <Box 
+                    borderWidth="1px" 
+                    borderRadius="md" 
+                    p={3} 
+                    bg="gray.900" 
+                    color="gray.100"
+                    fontFamily="mono"
+                    fontSize="xs"
+                    height="400px"
+                    overflowY="auto"
                   >
-                    View Test Details
-                  </Button>
-                  <Button
-                    as={Link}
-                    href={`/tests/${createdTestId}/run`}
-                    colorScheme="blue"
-                    leftIcon={<Icon as={FiPlay} />}
-                  >
-                    Run Test Now
-                  </Button>
-                </HStack>
-              </>
-            )}
-          </VStack>
+                      <pre>{playwrightCode || "// Loading Playwright code..."}</pre>
+                      </Box>
+                </VStack>
+              </TabPanel>
+
+                {/* PractiTest Format Tab */}
+                <TabPanel p={4} bg="gray.700" borderRadius="md" mt={2}>
+                <VStack spacing={4} align="stretch">
+                    <Flex justify="space-between" align="center">
+                      <Heading size="sm" color="white">PractiTest Export Format</Heading>
+                      <HStack>
+                                <Button 
+                                  size="sm"
+                          colorScheme="green" 
+                          leftIcon={<DownloadIcon />}
+                          onClick={() => testsApi.downloadPractiTestExport(createdTestId)}
+                        >
+                          Download Excel
+                                </Button>
+                      </HStack>
+                    </Flex>
+                    
+                          <Box 
+                            borderWidth="1px" 
+                            borderRadius="md" 
+                            p={3} 
+                            bg="gray.900" 
+                            color="gray.100"
+                            fontFamily="mono"
+                            fontSize="xs"
+                            height="400px"
+                            overflowY="auto"
+                    >
+                      <pre>{practiTestFormat || "// Loading PractiTest format..."}</pre>
+                        </Box>
+                </VStack>
+              </TabPanel>
+            </TabPanels>
+          </Tabs>
+
+            <Button 
+              alignSelf="center" 
+              variant="ghost" 
+              color="gray.400"
+              onClick={() => {
+                setCreatedTestId(null);
+                setHtmlContent('');
+              }}
+              size="sm"
+              mt={2}
+            >
+              Close & Create Another Test
+            </Button>
+        </VStack>
         </Box>
       </Box>
-    )
+    );
   }
 
   // Import page UI
   return (
-      <VStack spacing={6} align="stretch">
-        <Breadcrumb>
-          <BreadcrumbItem>
-            <BreadcrumbLink as={Link} href="/">Home</BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbItem isCurrentPage>
-            <BreadcrumbLink>Import Test</BreadcrumbLink>
-          </BreadcrumbItem>
-        </Breadcrumb>
+    <VStack spacing={6} align="stretch">
+      <Breadcrumb>
+        <BreadcrumbItem>
+          <BreadcrumbLink as={Link} href="/">Home</BreadcrumbLink>
+        </BreadcrumbItem>
+        <BreadcrumbItem isCurrentPage>
+          <BreadcrumbLink>Import Test</BreadcrumbLink>
+        </BreadcrumbItem>
+      </Breadcrumb>
 
-        <Flex justify="space-between" align="center">
-          <Box>
-            <Heading size="lg">Import Scribe Test</Heading>
-            <Text color="gray.400">
-              Paste your Scribe HTML export to create a new test case
-            </Text>
-          </Box>
-          <Tooltip label="Show help">
-            <IconButton
-              aria-label="Show help"
-              icon={showHelp ? <FiChevronUp /> : <FiChevronDown />}
-              size="sm"
-              variant="ghost"
-              onClick={() => setShowHelp(!showHelp)}
-            />
-          </Tooltip>
-        </Flex>
+      <Box>
+        <Heading size="lg" mb={2}>Import Test from Scribe</Heading>
+        <Text color="gray.400" mb={6}>
+          Paste your Scribe HTML to create a test case. The test will be created automatically.
+        </Text>
+      </Box>
 
-        {renderHelpSection()}
+      <Card>
+        <CardBody>
+          <VStack spacing={4} align="stretch">
+            <FormControl>
+              <FormLabel>Paste Scribe HTML</FormLabel>
+              <Textarea 
+                placeholder="Paste your Scribe HTML here..."
+                height="300px"
+                value={htmlContent}
+                onChange={(e) => setHtmlContent(e.target.value)}
+                onPaste={handlePaste}
+                isDisabled={isValidating || createTestMutation.isPending}
+              />
+            </FormControl>
 
-        <Card>
-          <CardBody>
-            <VStack spacing={4}>
-              <Tabs variant="soft-rounded" colorScheme="blue" size="sm" index={activeTab} onChange={setActiveTab} width="100%">
-                <TabList>
-                  <Tab>Paste HTML</Tab>
-                  <Tab>Upload File</Tab>
-                </TabList>
-                <TabPanels mt={4}>
-                  <TabPanel p={0}>
-                    <FormControl>
-                      <FormLabel>Scribe HTML Content</FormLabel>
-                      <Textarea
-                        placeholder="Paste your Scribe HTML here..."
-                        minH="200px"
-                        onPaste={handlePaste}
-                        onChange={handleChange}
-                        value={htmlContent}
-                        bg="gray.700"
-                        border="2px"
-                        borderStyle="dashed"
-                        borderColor="gray.600"
-                        _hover={{ borderColor: 'primary.500' }}
-                        _focus={{ 
-                          borderColor: 'primary.500',
-                          boxShadow: 'none'
-                        }}
-                        color="white"
-                        _placeholder={{ color: 'gray.400' }}
-                        isDisabled={isValidating || createTestMutation.isPending}
-                      />
-                    </FormControl>
-                  </TabPanel>
-                  <TabPanel p={0}>
-                    <Box
-                      border="2px"
-                      borderStyle="dashed"
-                      borderColor="gray.600"
-                      borderRadius="md"
-                      p={8}
-                      textAlign="center"
-                      bg="gray.700"
-                      cursor="pointer"
-                      _hover={{ borderColor: 'primary.500' }}
-                      onClick={() => {
-                        // This would normally trigger a file upload
-                        // For now, just switch to the paste tab and use the example
-                        setActiveTab(0)
-                        handleUseExample()
-                      }}
-                    >
-                      <VStack spacing={3}>
-                        <Icon as={FiClipboard} boxSize={8} color="gray.400" />
-                        <Text color="gray.700" fontSize="sm">
-                          Click to upload a Scribe HTML file
-                        </Text>
-                        <Text color="gray.500" fontSize="xs">
-                          or drag and drop here
-                        </Text>
-                      </VStack>
-                    </Box>
-                  </TabPanel>
-                </TabPanels>
-              </Tabs>
+            <HStack justify="space-between">
+              <Button
+                variant="outline"
+                onClick={handleUseExample}
+                isDisabled={isValidating || createTestMutation.isPending}
+              >
+                {hasCopied ? 'Example Copied!' : 'Use Example'}
+              </Button>
 
               {(isValidating || createTestMutation.isPending) && (
-                <Box w="full">
-                  <Progress 
-                    size="xs" 
-                    isIndeterminate 
-                    colorScheme="primary" 
-                  />
-                  <Text mt={2} fontSize="sm" color="gray.600" textAlign="center">
-                    {isValidating ? 'Validating Scribe content...' : 'Creating test...'}
+                <HStack>
+                  <Spinner size="sm" />
+                  <Text fontSize="sm" color="gray.500">
+                    {isValidating ? 'Validating...' : 'Creating test...'}
                   </Text>
-                </Box>
+                </HStack>
               )}
+            </HStack>
+          </VStack>
+        </CardBody>
+      </Card>
 
-              <HStack spacing={4} justify="space-between" width="100%">
-                <Button
-                  size="sm"
-                  leftIcon={<Icon as={hasCopied ? FiCheckCircle : FiClipboard} />}
-                  variant="ghost"
-                  onClick={handleUseExample}
-                >
-                  {hasCopied ? 'Example Copied!' : 'Use Example'}
-                </Button>
-
-                <Button
-                  colorScheme="primary"
-                  onClick={() => {
-                    if (htmlContent) {
-                      processHtmlContent(htmlContent)
-                    } else {
-                      toast({
-                        title: 'No content',
-                        description: 'Please paste or upload Scribe HTML content',
-                        status: 'warning',
-                        duration: 3000,
-                      })
-                    }
-                  }}
-                  isDisabled={isValidating || !htmlContent.trim()}
-                  isLoading={isValidating}
-                  loadingText="Processing..."
-                >
-                  Preview Test
-                </Button>
-              </HStack>
-            </VStack>
-          </CardBody>
-        </Card>
-        
-        {/* Render success state overlay */}
-        {renderSuccessState()}
-      </VStack>
+      <AuthModal
+        isOpen={showAuth}
+        onClose={() => setShowAuth(false)}
+        defaultMode={authMode}
+      />
+    </VStack>
   )
 } 

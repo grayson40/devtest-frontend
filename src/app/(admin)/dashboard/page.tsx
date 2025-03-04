@@ -109,16 +109,16 @@ export default function DashboardPage() {
   }
 
   return (
-    <Box>
+      <Box>
       <Box mb={8}>
-        <Heading 
+            <Heading 
           as="h1" 
           size="xl" 
           mb={4}
           color="white"
-        >
-          Dashboard
-        </Heading>
+            >
+              Dashboard
+            </Heading>
         <Text color="gray.400" mb={6}>
           Overview of your test management platform
         </Text>
@@ -131,7 +131,7 @@ export default function DashboardPage() {
               Create Test
             </Button>
           </Link>
-          <Button 
+          <Button
             variant="outline" 
             leftIcon={<Icon as={FiRefreshCw} />}
             onClick={() => refetchActive()}
@@ -139,14 +139,14 @@ export default function DashboardPage() {
             Refresh
           </Button>
         </HStack>
-      </Box>
+                  </Box>
 
       <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={6} mb={8}>
         <Stat
           bg="gray.800"
-          p={4}
+                        p={4} 
           borderRadius="lg"
-          borderWidth="1px"
+                        borderWidth="1px" 
           borderColor="gray.700"
         >
           <StatLabel color="gray.400">Total Tests</StatLabel>
@@ -154,8 +154,8 @@ export default function DashboardPage() {
           <StatHelpText color="gray.400">
             <StatArrow type="increase" />
             0%
-          </StatHelpText>
-        </Stat>
+                    </StatHelpText>
+                  </Stat>
         
         <Stat
           bg="gray.800"
@@ -169,8 +169,8 @@ export default function DashboardPage() {
           <StatHelpText color="gray.400">
             <StatArrow type="increase" />
             0%
-          </StatHelpText>
-        </Stat>
+                    </StatHelpText>
+                  </Stat>
         
         <Stat
           bg="gray.800"
@@ -184,8 +184,8 @@ export default function DashboardPage() {
           <StatHelpText color="gray.400">
             <StatArrow type="increase" />
             0%
-          </StatHelpText>
-        </Stat>
+                    </StatHelpText>
+                  </Stat>
         
         <Stat
           bg="gray.800"
@@ -199,16 +199,16 @@ export default function DashboardPage() {
           <StatHelpText color="gray.400">
             <StatArrow type="increase" />
             0%
-          </StatHelpText>
-        </Stat>
-      </SimpleGrid>
+                    </StatHelpText>
+                  </Stat>
+                </SimpleGrid>
 
       <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={6} mb={8}>
         <Box
           bg="gray.800"
           p={6}
           borderRadius="lg"
-          borderWidth="1px"
+                        borderWidth="1px" 
           borderColor="gray.700"
         >
           <Heading as="h3" size="md" mb={4} color="white">
@@ -245,7 +245,7 @@ export default function DashboardPage() {
               No recent executions
             </Text>
           )}
-        </Box>
+                  </Box>
 
         <Box
           bg="gray.800"
@@ -262,15 +262,15 @@ export default function DashboardPage() {
             <Text color="gray.400" textAlign="center" py={4}>
               No environments configured
             </Text>
-          </Flex>
-        </Box>
+                </Flex>
+                  </Box>
       </SimpleGrid>
 
       <Box
         bg="gray.800"
         p={6}
         borderRadius="lg"
-        borderWidth="1px"
+                        borderWidth="1px" 
         borderColor="gray.700"
       >
         <Heading as="h3" size="md" mb={4} color="white">
@@ -279,7 +279,7 @@ export default function DashboardPage() {
         
         <Text color="gray.400" textAlign="center" py={4}>
           No test data available
-        </Text>
+                          </Text>
       </Box>
     </Box>
   )

@@ -15,10 +15,13 @@ export type TestStatus = 'draft' | 'active' | 'archived'
 
 export interface TestCase {
   id?: string
+  _id?: string  // MongoDB ID from backend
   title: string
   description?: string
   steps: TestStep[]
   status?: TestStatus
+  playwrightTestPath?: string
+  practiTestExportPath?: string
 }
 
 export interface TestResult {
@@ -142,5 +145,30 @@ export const testsApi = {
   // Delete a test result
   deleteTestResult: async (id: string): Promise<void> => {
     await axios.delete(`${API_BASE_URL}/results/${id}`)
+  },
+
+  // Export test to PractiTest format
+  exportToPractiTest: async (id: string): Promise<void> => {
+    await axios.post(`${API_BASE_URL}/tests/${id}/export-practitest`)
+  },
+
+  // Get download URL for PractiTest export
+  getExportDownloadUrl: (id: string): string => {
+    return `${API_BASE_URL}/tests/${id}/download-export`
+  },
+
+  // Get download URL for Playwright test file
+  getPlaywrightDownloadUrl: (id: string): string => {
+    return `${API_BASE_URL}/tests/${id}/download-playwright`
+  },
+
+  // Download PractiTest export file
+  downloadPractiTestExport: (id: string): void => {
+    window.open(`${API_BASE_URL}/tests/${id}/download-export`, '_blank')
+  },
+
+  // Download Playwright test file
+  downloadPlaywrightTest: (id: string): void => {
+    window.open(`${API_BASE_URL}/tests/${id}/download-playwright`, '_blank')
   }
 } 
